@@ -1,0 +1,95 @@
+from typing import Callable
+
+import numpy as np
+import torch
+from tqdm.auto import tqdm
+
+from .schedule import Schedule
+
+
+class Diffusion:
+    """
+    A PyTorch implementation of continuous-time diffusion.
+    """
+
+    def __init__(self, schedule: Schedule):
+        self.schedule = schedule
+
+    def sample_q(
+        self, x_0: torch.Tensor, ts: torch.Tensor, epsilon: torch.Tensor = None
+    ):
+        """
+        Sample from q(x_t | x_0) for a batch of x_0.
+        """
+        if epsilon is None:
+            epsilon = torch.randn_like(x_0)
+        alphas = broadcast_as(self.schedule(ts), x_0)
+        return alphas.sqrt() * x_0 + (1 - alphas).sqrt() * epsilon
+
+    def predict_x0(
+        self, x_t: torch.Tensor, ts: torch.Tensor, epsilon_prediction: torch.Tensor
+    ):
+        """
+        Evaluate the mean of p(x_0 | x_t), provided the model's epsilon
+        prediction for x_t.
+        """
+        alphas = broadcast_as(self.schedule(ts), x_t)
+        return (x_t - (1 - alphas).sqrt() * epsilon_prediction) * alphas.rsqrt()
+
+    def ddpm_previous(
+        self,
+        x_t: torch.Tensor,
+        ts: torch.Tensor,
+        step: float,
+        epsilon_prediction: torch.Tensor,
+        noise: torch.Tensor = None,
+    ):
+        """
+        Sample the previous timestep using reverse diffusion.
+        """
+        if noise is None:
+            noise = np.random.normal(size=x_t.shape)
+        alphas_t = broadcast_as(self.schedule(ts), x_t)
+        alphas_prev = broadcast_as(self.schedule(ts - step), x_t)
+        alphas = alphas_t / alphas_prev
+        betas = 1 - alphas
+        return (
+            alphas.rsqrt() * (x_t - betas * (1 - alphas_t).rsqrt() * epsilon_prediction)
+            + betas.sqrt() * noise
+        )
+
+    def ddpm_sample(
+        self,
+        x_T: torch.Tensor,
+        predictor: Callable[torch.Tensor, torch.Tensor],
+        steps: int,
+        progress: bool = False,
+    ):
+        """
+        Sample x_0 from x_t using reverse diffusion.
+        """
+        x_t = x_T
+        ts = [(i + 1) / steps for i in range(steps)]
+        t_step = 1 / steps
+
+        its = enumerate(ts[::-1])
+        if progress:
+            its = tqdm(its)
+
+        for i, t in its:
+            ts = torch.tensor([t] * x_T.shape[0]).to(x_T)
+            x_t = self.ddpm_previous(
+                x_t=x_t,
+                ts=ts,
+                step=t_step,
+                epsilon_prediction=predictor.predict_epsilon(x_t, ts),
+                noise=torch.zeros_like(x_T) if i + 1 == steps else None,
+            )
+
+        return x_t
+
+
+def broadcast_as(ts, tensor):
+    while len(ts.shape) < len(tensor.shape):
+        ts = ts[:, None]
+    return ts + torch.zeros_like(tensor)
