@@ -82,7 +82,7 @@ class Diffusion:
                 x_t=x_t,
                 ts=ts,
                 step=t_step,
-                epsilon_prediction=predictor.predict_epsilon(x_t, ts),
+                epsilon_prediction=predictor(x_t, ts),
                 noise=torch.zeros_like(x_T) if i + 1 == steps else None,
             )
 
