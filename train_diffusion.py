@@ -54,7 +54,7 @@ def arg_parser():
     parser.add_argument("--batch-size", default=8, type=int)
     parser.add_argument("--checkpoint-path", default="model_diffusion.pt", type=str)
     parser.add_argument("--save-interval", default=1000, type=int)
-    parser.add_argument("data-dir", type=str)
+    parser.add_argument("data-dir", type=str, required=True)
     return parser
 
 
