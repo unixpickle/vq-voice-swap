@@ -29,10 +29,10 @@ def main():
         directory=args.data_dir, batch_size=args.batch_size
     )
     for i, data_batch in enumerate(data_loader):
-        data_batch = {k: v.to(device) for k, v in data_batch.items()}
+        audio_seq = data_batch["samples"][:, None].to(device)
         ts = torch.rand(args.batch_size, device=device)
-        noise = torch.randn_like(data_batch["samples"])
-        samples = diffusion.sample_q(data_batch["samples"], ts, epsilon=noise)
+        noise = torch.randn_like(audio_seq)
+        samples = diffusion.sample_q(audio_seq, ts, epsilon=noise)
         loss = ((noise - model(samples, ts)) ** 2).mean()
         opt.zero_grad()
         loss.backward()
