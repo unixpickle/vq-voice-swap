@@ -61,7 +61,7 @@ class Diffusion:
     def ddpm_sample(
         self,
         x_T: torch.Tensor,
-        predictor: Callable[torch.Tensor, torch.Tensor],
+        predictor: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
         steps: int,
         progress: bool = False,
     ):
