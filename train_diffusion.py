@@ -33,7 +33,7 @@ def main():
         ts = torch.rand(args.batch_size, device=device)
         noise = torch.randn_like(data_batch["samples"])
         samples = diffusion.sample_q(data_batch["samples"], ts, epsilon=noise)
-        loss = ((noise - model(samples)) ** 2).mean()
+        loss = ((noise - model(samples, ts)) ** 2).mean()
         opt.zero_grad()
         loss.backward()
         opt.step()
