@@ -1,12 +1,38 @@
 import json
 import os
 import subprocess
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Tuple, Union
 
 import numpy as np
-from torch.utils.data import Dataset
+from torch.utils.data import DataLoader, Dataset
 
 DURATION_ESTIMATE_SLACK = 0.05
+
+
+def create_data_loader(
+    directory: str, batch_size: int, num_workers=4, **dataset_kwargs
+) -> Tuple[DataLoader, int]:
+    """
+    Create a LibriSpeech data loader.
+
+    Returned batches are dicts containing at least two keys:
+        - 'label' (int): the speaker ID.
+        - 'samples' (tensor): an [N x T] batch of samples.
+
+    :return: a pair (loader, num_labels), where loader is the DataLoader and
+             num_labels is one greater than the maximum label index.
+    """
+    dataset = LibriSpeech(directory, **dataset_kwargs)
+    return (
+        DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=num_workers,
+            drop_last=True,
+        ),
+        len(dataset.speaker_ids),
+    )
 
 
 class LibriSpeech(Dataset):
@@ -22,7 +48,7 @@ class LibriSpeech(Dataset):
         self.window_spacing = window_spacing
         self.sample_rate = sample_rate
 
-        index_path = os.path.join(self.directory)
+        index_path = os.path.join(self.directory, "index.json")
         if os.path.exists(index_path):
             with open(index_path, "rt") as f:
                 self.index = json.load(f)
@@ -87,7 +113,7 @@ def _build_file_index(data_dir: str) -> Dict[str, Union[Dict, float]]:
         item_path = os.path.join(data_dir, item)
         if item.endswith(".flac") and not item.startswith("."):
             result[item] = _lookup_audio_duration(item_path)
-        else:
+        elif os.path.isdir(item_path):
             sub_result = _build_file_index(item_path)
             if len(sub_result):
                 result[item] = sub_result
