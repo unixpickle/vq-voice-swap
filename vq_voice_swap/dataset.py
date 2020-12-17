@@ -40,7 +40,7 @@ class LibriSpeech(Dataset):
         self,
         directory: str,
         window_duration: float = 4.0,
-        window_spacing: float = 0.05,
+        window_spacing: float = 0.2,
         sample_rate: int = 16000,
     ):
         self.directory = directory
