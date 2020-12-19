@@ -92,4 +92,4 @@ class Diffusion:
 def broadcast_as(ts, tensor):
     while len(ts.shape) < len(tensor.shape):
         ts = ts[:, None]
-    return ts + torch.zeros_like(tensor)
+    return ts.to(tensor) + torch.zeros_like(tensor)
