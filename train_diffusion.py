@@ -20,6 +20,10 @@ def main():
     diffusion = Diffusion(ExpSchedule())
     model = WaveGradModel()
 
+    if os.path.exists(args.checkpoint_path):
+        print("loading from checkpoint...")
+        model.load_state_dict(torch.load(args.checkpoint_path, map_location="cpu"))
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
