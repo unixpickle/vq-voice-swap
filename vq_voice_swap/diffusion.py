@@ -43,6 +43,7 @@ class Diffusion:
         step: float,
         epsilon_prediction: torch.Tensor,
         noise: torch.Tensor = None,
+        sigma_large: bool = False,
     ):
         """
         Sample the previous timestep using reverse diffusion.
@@ -53,9 +54,15 @@ class Diffusion:
         alphas_prev = broadcast_as(self.schedule(ts - step), x_t)
         alphas = alphas_t / alphas_prev
         betas = 1 - alphas
+
+        if not sigma_large:
+            sigmas = betas * (1 - alphas_prev) / (1 - alphas)
+        else:
+            sigmas = betas
+
         return (
             alphas.rsqrt() * (x_t - betas * (1 - alphas_t).rsqrt() * epsilon_prediction)
-            + betas.sqrt() * noise
+            + sigmas.sqrt() * noise
         )
 
     def ddpm_sample(
@@ -64,6 +71,7 @@ class Diffusion:
         predictor: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
         steps: int,
         progress: bool = False,
+        sigma_large: bool = False,
     ):
         """
         Sample x_0 from x_t using reverse diffusion.
@@ -84,6 +92,7 @@ class Diffusion:
                 step=t_step,
                 epsilon_prediction=predictor(x_t, ts),
                 noise=torch.zeros_like(x_T) if i + 1 == steps else None,
+                sigma_large=sigma_large,
             )
 
         return x_t
