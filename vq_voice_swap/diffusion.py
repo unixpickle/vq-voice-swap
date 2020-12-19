@@ -55,7 +55,7 @@ class Diffusion:
         betas = 1 - alphas
 
         if not sigma_large:
-            sigmas = betas * (1 - alphas_prev) / (1 - alphas)
+            sigmas = betas * (1 - alphas_prev) / (1 - alphas_t)
         else:
             sigmas = betas
 
