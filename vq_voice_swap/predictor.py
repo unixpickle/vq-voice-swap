@@ -162,4 +162,3 @@ class TimestepFILM(nn.Module):
         gamma, beta = torch.split(gamma_beta, gamma_beta.shape[1] // 2, dim=1)
 
         return x * gamma + beta
-
