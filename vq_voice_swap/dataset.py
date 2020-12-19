@@ -199,6 +199,61 @@ class ChunkReader:
             self._reader.close()
 
 
+class ChunkWriter:
+    """
+    An API for writing chunks of audio samples from an audio file.
+
+    :param path: the path to the audio file.
+    :param sample_rate: the number of samples per second to write.
+    """
+
+    def __init__(self, path, sample_rate):
+        self.path = path
+        self.sample_rate = sample_rate
+
+        audio_reader, audio_writer = os.pipe()
+        try:
+            audio_format = ["-ar", str(sample_rate), "-ac", "1", "-f", "s16le"]
+            audio_params = audio_format + [
+                "-probesize",
+                "32",
+                "-thread_queue_size",
+                "60",
+                "-i",
+                "pipe:%i" % audio_reader,
+            ]
+            output_params = [path]
+            self._ffmpeg_proc = subprocess.Popen(
+                ["ffmpeg", "-y", *audio_params, *output_params],
+                pass_fds=(audio_reader,),
+                stdin=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+            )
+            self._audio_writer = audio_writer
+            audio_writer = None
+        finally:
+            if audio_writer is not None:
+                os.close(audio_writer)
+            os.close(audio_reader)
+
+        self._writer = os.fdopen(self._audio_writer, "wb", buffering=1024)
+
+    def write(self, chunk):
+        """
+        Read a chunk of audio samples from the file.
+
+        :param chunk: a chunk of samples, stored as a 1-D numpy array of floats,
+                      where each sample is in the range [-1, 1].
+        """
+        data = bytes((chunk * (2 ** 15 - 1)).astype("int16"))
+        self._writer.write(data)
+
+    def close(self):
+        self._writer.close()
+        self._ffmpeg_proc.wait()
+
+
 def _lookup_audio_duration(path: str) -> float:
     p = subprocess.Popen(
         ["ffmpeg", "-i", path],
