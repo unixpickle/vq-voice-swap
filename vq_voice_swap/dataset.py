@@ -19,10 +19,17 @@ def create_data_loader(
         - 'label' (int): the speaker ID.
         - 'samples' (tensor): an [N x T] batch of samples.
 
+    :param directory: the LibriSpeech data directory, or "tones" to use a
+                      placeholder dataset.
+    :param batch_size: the number of samples per batch.
+    :param num_workers: number of parallel data loading threads.
     :return: a pair (loader, num_labels), where loader is the DataLoader and
              num_labels is one greater than the maximum label index.
     """
-    dataset = LibriSpeech(directory, **dataset_kwargs)
+    if directory == "tones":
+        dataset = ToneDataset()
+    else:
+        dataset = LibriSpeech(directory, **dataset_kwargs)
     return (
         DataLoader(
             dataset,
@@ -105,6 +112,31 @@ class LibriSpeechDatum:
         self.label = label
         self.path = path
         self.offset = offset
+
+
+class ToneDataset(Dataset):
+    """
+    A dataset where each "speaker" is a different frequency and each sample is
+    just a phase-shifted sinusoidal wave.
+    """
+
+    def __init__(self):
+        self.speaker_ids = [300, 500, 1000]
+
+    def __len__(self):
+        return len(self.speaker_ids) * 10
+
+    def __getitem__(self, index) -> Dict[str, Union[int, np.ndarray]]:
+        speaker = index % len(self.speaker_ids)
+        frequency = self.speaker_ids[speaker]
+        phase = (index // len(self.speaker_ids)) / 10
+
+        data = np.arange(0, 64000, step=1).astype(np.float32) / 16000
+        coeffs = (data + phase) * np.pi * 2 * frequency
+        return {
+            "label": speaker,
+            "samples": np.sin(coeffs),
+        }
 
 
 def _build_file_index(data_dir: str) -> Dict[str, Union[Dict, float]]:
