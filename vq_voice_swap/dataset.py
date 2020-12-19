@@ -246,6 +246,7 @@ class ChunkWriter:
         :param chunk: a chunk of samples, stored as a 1-D numpy array of floats,
                       where each sample is in the range [-1, 1].
         """
+        chunk = np.clip(chunk, -1, 1)
         data = bytes((chunk * (2 ** 15 - 1)).astype("int16"))
         self._writer.write(data)
 
