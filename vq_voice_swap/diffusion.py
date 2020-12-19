@@ -86,14 +86,15 @@ class Diffusion:
 
         for i, t in its:
             ts = torch.tensor([t] * x_T.shape[0]).to(x_T)
-            x_t = self.ddpm_previous(
-                x_t=x_t,
-                ts=ts,
-                step=t_step,
-                epsilon_prediction=predictor(x_t, ts),
-                noise=torch.zeros_like(x_T) if i + 1 == steps else None,
-                sigma_large=sigma_large,
-            )
+            with torch.no_grad():
+                x_t = self.ddpm_previous(
+                    x_t=x_t,
+                    ts=ts,
+                    step=t_step,
+                    epsilon_prediction=predictor(x_t, ts),
+                    noise=torch.zeros_like(x_T) if i + 1 == steps else None,
+                    sigma_large=sigma_large,
+                )
 
         return x_t
 
