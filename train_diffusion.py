@@ -32,7 +32,7 @@ def main():
     data_loader, _ = create_data_loader(
         directory=args.data_dir, batch_size=args.batch_size
     )
-    for i, data_batch in enumerate(data_loader):
+    for i, data_batch in enumerate(repeat_dataset(data_loader)):
         audio_seq = data_batch["samples"][:, None].to(device)
         ts = torch.rand(args.batch_size, device=device)
         noise = torch.randn_like(audio_seq)
@@ -48,6 +48,11 @@ def main():
             tmp_file = args.checkpoint_path + ".tmp"
             torch.save(model.state_dict(), tmp_file)
             os.rename(tmp_file, args.checkpoint_path)
+
+
+def repeat_dataset(data_loader):
+    while True:
+        yield from data_loader
 
 
 def arg_parser():
