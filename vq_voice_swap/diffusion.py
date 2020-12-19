@@ -48,7 +48,7 @@ class Diffusion:
         Sample the previous timestep using reverse diffusion.
         """
         if noise is None:
-            noise = np.random.normal(size=x_t.shape)
+            noise = torch.randn_like(x_t)
         alphas_t = broadcast_as(self.schedule(ts), x_t)
         alphas_prev = broadcast_as(self.schedule(ts - step), x_t)
         alphas = alphas_t / alphas_prev
