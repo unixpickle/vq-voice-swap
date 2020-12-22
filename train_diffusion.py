@@ -10,7 +10,7 @@ from torch.optim import AdamW
 
 from vq_voice_swap.dataset import create_data_loader
 from vq_voice_swap.diffusion import Diffusion
-from vq_voice_swap.predictor import WaveGradModel
+from vq_voice_swap.model import WaveGradPredictor
 from vq_voice_swap.schedule import ExpSchedule
 
 
@@ -18,7 +18,7 @@ def main():
     args = arg_parser().parse_args()
 
     diffusion = Diffusion(ExpSchedule())
-    model = WaveGradModel()
+    model = WaveGradPredictor()
 
     if os.path.exists(args.checkpoint_path):
         print("loading from checkpoint...")

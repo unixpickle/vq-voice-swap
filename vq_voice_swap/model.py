@@ -17,13 +17,13 @@ class Predictor(nn.Module):
         return functools.partial(self, **kwargs)
 
 
-class WaveGradModel(Predictor):
+class WaveGradPredictor(Predictor):
     """
     A model similar to that in GAN-TTS (https://arxiv.org/abs/1909.11646v2)
     and WaveGrad (https://arxiv.org/abs/2009.00713).
     """
 
-    def __init__(self, cond_channels=512):
+    def __init__(self, cond_channels: int = 512):
         super().__init__()
         self.cond_channels = cond_channels
         self.d_blocks = nn.ModuleList(
@@ -68,6 +68,30 @@ class WaveGradModel(Predictor):
             u_input = block(u_input, d_outputs.pop())
         out = self.u_conv_2(u_input)
         return out
+
+
+class WaveGradEncoder(nn.Module):
+    """
+    An encoder-only version of WaveGradPredictor that can be used to downsample
+    waveforms.
+    """
+
+    def __init__(self, cond_channels: int = 512):
+        super().__init__()
+        self.cond_channels = cond_channels
+        self.d_blocks = nn.Sequential(
+            [
+                nn.Conv1d(1, 32, 5, padding=2),
+                DBlock(32, 128, 2),
+                DBlock(128, 128, 2),
+                DBlock(128, 256, 2),
+                DBlock(256, 512, 2),
+                DBlock(512, cond_channels, 4),
+            ]
+        )
+
+    def forward(self, x):
+        return self.d_blocks(x)
 
 
 class UBlock(nn.Module):

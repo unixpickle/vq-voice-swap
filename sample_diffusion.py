@@ -8,7 +8,7 @@ import torch
 
 from vq_voice_swap.dataset import ChunkWriter
 from vq_voice_swap.diffusion import Diffusion
-from vq_voice_swap.predictor import WaveGradModel
+from vq_voice_swap.model import WaveGradPredictor
 from vq_voice_swap.schedule import ExpSchedule
 
 
@@ -16,7 +16,7 @@ def main():
     args = arg_parser().parse_args()
 
     diffusion = Diffusion(ExpSchedule())
-    model = WaveGradModel()
+    model = WaveGradPredictor()
 
     model.load_state_dict(torch.load(args.checkpoint_path, map_location="cpu"))
 
