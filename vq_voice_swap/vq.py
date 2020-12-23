@@ -96,7 +96,7 @@ class VQ(nn.Module):
         diffs = embedding_distances(self.dictionary, x)
         idxs = torch.argmin(diffs, dim=-1)
         embedded = self.embed(idxs)
-        passthrough = embedded.detach() + (inputs - inputs.detach())
+        passthrough = embedded.detach() + (x - x.detach())
 
         if self.training:
             self._update_tracker(idxs)

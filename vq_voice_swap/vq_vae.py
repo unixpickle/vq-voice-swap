@@ -47,13 +47,14 @@ class VQVAE(nn.Module):
         """
         encoder_out = self.encoder(inputs)
         vq_out = self.vq(encoder_out)
-        vq_loss = self.vq_loss(inputs, vq_out["embedded"])
+        vq_loss = self.vq_loss(encoder_out, vq_out["embedded"])
 
         ts = torch.rand(inputs.shape[0]).to(inputs)
-        noised_inputs = self.diffusion.sample_q(inputs, ts)
+        epsilon = torch.randn_like(inputs)
+        noised_inputs = self.diffusion.sample_q(inputs, ts, epsilon=epsilon)
         cond_seq = vq_out["passthrough"] + self.label_embeddings(labels)[..., None]
         predictions = self.predictor(noised_inputs, ts, cond=cond_seq)
-        mse = ((predictions - inputs) ** 2).mean()
+        mse = ((predictions - epsilon) ** 2).mean()
 
         return {"vq_loss": vq_loss, "mse": mse}
 

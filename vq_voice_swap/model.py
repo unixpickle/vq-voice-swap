@@ -80,14 +80,12 @@ class WaveGradEncoder(nn.Module):
         super().__init__()
         self.cond_channels = cond_channels
         self.d_blocks = nn.Sequential(
-            [
-                nn.Conv1d(1, 32, 5, padding=2),
-                DBlock(32, 128, 2),
-                DBlock(128, 128, 2),
-                DBlock(128, 256, 2),
-                DBlock(256, 512, 2),
-                DBlock(512, cond_channels, 4),
-            ]
+            nn.Conv1d(1, 32, 5, padding=2),
+            DBlock(32, 128, 2),
+            DBlock(128, 128, 2),
+            DBlock(128, 256, 2),
+            DBlock(256, 512, 2),
+            DBlock(512, cond_channels, 4),
         )
 
     def forward(self, x):
@@ -144,10 +142,10 @@ class DBlock(nn.Module):
 
         self.res_transform = nn.Sequential(
             nn.Conv1d(in_channels, out_channels, 3, padding=1),
-            nn.AvgPool1d(2, stride=2),
+            nn.AvgPool1d(downsample_rate, stride=downsample_rate),
         )
         self.block_1 = nn.Sequential(
-            nn.AvgPool1d(2, stride=2),
+            nn.AvgPool1d(downsample_rate, stride=downsample_rate),
             nn.ReLU(),
             nn.Conv1d(in_channels, out_channels, 3, padding=1),
             nn.ReLU(),
