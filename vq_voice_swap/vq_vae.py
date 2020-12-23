@@ -47,7 +47,7 @@ class VQVAE(nn.Module):
         """
         encoder_out = self.encoder(inputs)
         vq_out = self.vq(encoder_out)
-        vq_loss = self.vq_loss(inputs, vq_out["embedded"])
+        vq_loss = self.vq_loss(encoder_out, vq_out["embedded"])
 
         ts = torch.rand(inputs.shape[0]).to(inputs)
         noised_inputs = self.diffusion.sample_q(inputs, ts)
