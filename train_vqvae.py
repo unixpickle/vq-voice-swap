@@ -42,6 +42,8 @@ def main():
         loss.backward()
         opt.step()
 
+        model.vq.revive_dead_entries()
+
         step = i + 1
         print(
             f"step {step}: vq_loss={losses['vq_loss'].item()} mse={losses['mse'].item()}"
