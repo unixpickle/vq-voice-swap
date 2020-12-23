@@ -142,10 +142,10 @@ class DBlock(nn.Module):
 
         self.res_transform = nn.Sequential(
             nn.Conv1d(in_channels, out_channels, 3, padding=1),
-            nn.AvgPool1d(2, stride=2),
+            nn.AvgPool1d(downsample_rate, stride=downsample_rate),
         )
         self.block_1 = nn.Sequential(
-            nn.AvgPool1d(2, stride=2),
+            nn.AvgPool1d(downsample_rate, stride=downsample_rate),
             nn.ReLU(),
             nn.Conv1d(in_channels, out_channels, 3, padding=1),
             nn.ReLU(),
