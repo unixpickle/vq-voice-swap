@@ -80,14 +80,12 @@ class WaveGradEncoder(nn.Module):
         super().__init__()
         self.cond_channels = cond_channels
         self.d_blocks = nn.Sequential(
-            [
-                nn.Conv1d(1, 32, 5, padding=2),
-                DBlock(32, 128, 2),
-                DBlock(128, 128, 2),
-                DBlock(128, 256, 2),
-                DBlock(256, 512, 2),
-                DBlock(512, cond_channels, 4),
-            ]
+            nn.Conv1d(1, 32, 5, padding=2),
+            DBlock(32, 128, 2),
+            DBlock(128, 128, 2),
+            DBlock(128, 256, 2),
+            DBlock(256, 512, 2),
+            DBlock(512, cond_channels, 4),
         )
 
     def forward(self, x):
