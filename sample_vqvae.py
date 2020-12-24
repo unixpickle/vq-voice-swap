@@ -23,7 +23,7 @@ def main():
     print(f"loading waveform from {args.input_file}...")
     reader = ChunkReader(args.input_file, sample_rate=args.sample_rate)
     try:
-        chunk = reader.read(args.samples)
+        chunk = reader.read(args.seconds * args.sample_rate)
     finally:
         reader.close()
     in_seq = torch.from_numpy(chunk[None]).to(device)
@@ -49,9 +49,9 @@ def arg_parser():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument("--sample-rate", type=int, default=16000)
-    parser.add_argument("--sample-steps", type=int, default=64000)
+    parser.add_argument("--sample-steps", type=int, default=100)
+    parser.add_argument("--seconds", type=int, default=4)
     parser.add_argument("--label", type=int, default=0)
-    parser.add_argument("--steps", type=int, default=100)
     parser.add_argument("checkpoint_path", type=str)
     parser.add_argument("input_file", type=str)
     parser.add_argument("output_file", type=str)
