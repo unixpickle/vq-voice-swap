@@ -26,7 +26,7 @@ def main():
         chunk = reader.read(args.seconds * args.sample_rate)
     finally:
         reader.close()
-    in_seq = torch.from_numpy(chunk[None]).to(device)
+    in_seq = torch.from_numpy(chunk[None, None]).to(device)
 
     print("encoding audio sequence...")
     encoded = model.encode(in_seq)
