@@ -9,6 +9,7 @@ import torch
 from torch.optim import AdamW
 
 from vq_voice_swap.dataset import create_data_loader
+from vq_voice_swap.loss_tracker import LossTracker
 from vq_voice_swap.vq_vae import WaveGradVQVAE
 
 
@@ -31,6 +32,7 @@ def main():
     model.to(device)
 
     opt = AdamW(model.parameters(), lr=args.lr)
+    lt = LossTracker()
 
     for i, data_batch in enumerate(repeat_dataset(data_loader)):
         audio_seq = data_batch["samples"][:, None].to(device)
@@ -45,8 +47,9 @@ def main():
         model.vq.revive_dead_entries()
 
         step = i + 1
+        lt.add(losses["ts"], losses["mses"])
         print(
-            f"step {step}: vq_loss={losses['vq_loss'].item()} mse={losses['mse'].item()}"
+            f"step {step}: vq_loss={losses['vq_loss'].item()} mse={losses['mse'].item()} {lt.log_str()}"
         )
         if step % args.save_interval == 0:
             model.save(args.checkpoint_path)

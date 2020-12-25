@@ -44,6 +44,8 @@ class VQVAE(nn.Module):
         :return: a dict containing the following keys:
                  - "vq_loss": loss for the vector quantization layer.
                  - "mse": loss for the diffusion decoder.
+                 - "ts": a 1-D float tensor of the timesteps per batch entry.
+                 - "mses": a 1-D tensor of the MSE losses per batch entry.
         """
         encoder_out = self.encoder(inputs)
         vq_out = self.vq(encoder_out)
@@ -54,9 +56,15 @@ class VQVAE(nn.Module):
         noised_inputs = self.diffusion.sample_q(inputs, ts, epsilon=epsilon)
         cond_seq = vq_out["passthrough"] + self.label_embeddings(labels)[..., None]
         predictions = self.predictor(noised_inputs, ts, cond=cond_seq)
-        mse = ((predictions - epsilon) ** 2).mean()
+        mses = ((predictions - epsilon) ** 2).flatten(1).mean(1)
+        mse = mses.mean()
 
-        return {"vq_loss": vq_loss, "mse": mse}
+        return {
+            "vq_loss": vq_loss,
+            "mse": mse,
+            "ts": ts,
+            "mses": mses,
+        }
 
     def encode(self, inputs: torch.Tensor) -> torch.Tensor:
         """
