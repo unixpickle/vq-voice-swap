@@ -9,6 +9,7 @@ import torch
 from torch.optim import AdamW
 
 from vq_voice_swap.dataset import create_data_loader
+from vq_voice_swap.ema import ModelEMA
 from vq_voice_swap.loss_tracker import LossTracker
 from vq_voice_swap.vq_vae import WaveGradVQVAE
 
@@ -31,6 +32,14 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
+    ema = ModelEMA(
+        model,
+        rates={
+            "": args.ema_rate,
+            "vq.": args.vq_ema_rate,
+        },
+    )
+
     opt = AdamW(model.parameters(), lr=args.lr)
     lt = LossTracker()
 
@@ -43,6 +52,7 @@ def main():
         opt.zero_grad()
         loss.backward()
         opt.step()
+        ema.update()
 
         model.vq.revive_dead_entries()
 
@@ -53,6 +63,7 @@ def main():
         )
         if step % args.save_interval == 0:
             model.save(args.checkpoint_path)
+            ema.model.save(args.ema_path)
 
 
 def repeat_dataset(data_loader):
@@ -66,7 +77,10 @@ def arg_parser():
     )
     parser.add_argument("--lr", default=1e-4, type=float)
     parser.add_argument("--batch-size", default=8, type=int)
+    parser.add_argument("--ema-rate", default=0.9999, type=float)
+    parser.add_argument("--vq-ema-rate", default=0.99, type=float)
     parser.add_argument("--checkpoint-path", default="model_vqvae.pt", type=str)
+    parser.add_argument("--ema-path", default="model_vqvae_ema.pt", type=str)
     parser.add_argument("--save-interval", default=500, type=int)
     parser.add_argument("data_dir", type=str)
     return parser
