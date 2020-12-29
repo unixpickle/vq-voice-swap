@@ -55,9 +55,7 @@ class VQ(nn.Module):
         self.num_codes = num_codes
         self.dead_rate = dead_rate
 
-        self.dictionary = nn.Parameter(
-            torch.randn(num_codes, num_channels) / math.sqrt(num_channels)
-        )
+        self.dictionary = nn.Parameter(torch.randn(num_codes, num_channels))
         self.register_buffer("usage_count", dead_rate * torch.ones(num_codes).long())
         self._last_batch = None  # used for revival
 
