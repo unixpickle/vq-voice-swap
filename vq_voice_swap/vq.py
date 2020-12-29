@@ -4,7 +4,6 @@ Implementation of the vector quantization step in a VQ-VAE.
 Code adapted from: https://github.com/unixpickle/vq-vae-2/blob/6874db74dbc8e7a24c33303c0aa12d66d803c725/vq_vae_2/vq.py
 """
 
-import math
 import random
 
 import numpy as np
