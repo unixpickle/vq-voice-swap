@@ -1,6 +1,7 @@
 from abc import abstractmethod
 import functools
 import math
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -23,7 +24,7 @@ class WaveGradPredictor(Predictor):
     and WaveGrad (https://arxiv.org/abs/2009.00713).
     """
 
-    def __init__(self, cond_channels: int = 512):
+    def __init__(self, cond_channels: int = 512, num_labels: Optional[int] = None):
         super().__init__()
         self.cond_channels = cond_channels
         self.d_blocks = nn.ModuleList(
@@ -36,7 +37,7 @@ class WaveGradPredictor(Predictor):
             ]
         )
         self.film_blocks = nn.ModuleList(
-            [TimestepFILM(ch) for ch in [32, 128, 128, 256, 512]]
+            [FILM(ch, num_labels=num_labels) for ch in [32, 128, 128, 256, 512]]
         )
         self.u_conv_1 = nn.Conv1d(cond_channels, 768, 3, padding=1)
         self.u_blocks = nn.ModuleList(
@@ -50,7 +51,13 @@ class WaveGradPredictor(Predictor):
         )
         self.u_conv_2 = nn.Conv1d(128, 1, 3, padding=1)
 
-    def forward(self, x, t, cond=None):
+    def forward(
+        self,
+        x: torch.Tensor,
+        t: torch.Tensor,
+        cond: Optional[torch.Tensor] = None,
+        labels: Optional[torch.Tensor] = None,
+    ):
         assert x.shape[2] % 64 == 0, "timesteps must be divisible by 64"
 
         # Model doesn't need to be conditional
@@ -61,7 +68,7 @@ class WaveGradPredictor(Predictor):
         d_input = x
         for block, film_block in zip(self.d_blocks, self.film_blocks):
             d_input = block(d_input)
-            d_outputs.append(film_block(d_input, t))
+            d_outputs.append(film_block(d_input, t, labels=labels))
 
         u_input = self.u_conv_1(cond)
         for block in self.u_blocks:
@@ -156,19 +163,35 @@ class DBlock(nn.Module):
         return self.block_1(h) + self.res_transform(h)
 
 
-class TimestepFILM(nn.Module):
-    def __init__(self, ch, internal_ch=512):
+class FILM(nn.Module):
+    """
+    A FiLM layer that conditions on a timestep and (possibly) a label.
+
+    The timestep is a floating point in the range [0, 1], whereas the labels
+    are integers in the range [0, num_labels).
+    """
+
+    def __init__(
+        self, ch: int, num_labels: Optional[int] = None, internal_ch: int = 512
+    ):
         super().__init__()
         assert internal_ch % 2 == 0, "positional embedding must have dim divisible by 2"
-        self.internal_ch = internal_ch
         self.ch = ch
+        self.num_labels = num_labels
+        self.internal_ch = internal_ch
         self.mlp = nn.Sequential(
             nn.Linear(internal_ch, internal_ch),
             nn.ReLU(),
             nn.Linear(internal_ch, ch * 2),
         )
+        if num_labels is not None:
+            self.label_emb = nn.Embedding(num_labels, internal_ch)
+        else:
+            self.label_emb = None
 
-    def forward(self, x, t):
+    def forward(
+        self, x: torch.Tensor, t: torch.Tensor, labels: Optional[torch.Tensor] = None
+    ):
         half = self.internal_ch // 2
         freqs = torch.exp(
             -math.log(10.0)
@@ -177,6 +200,10 @@ class TimestepFILM(nn.Module):
         ).to(x)
         args = t[:, None].to(x.dtype) * freqs[None]
         embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
+
+        assert (labels is None) == (self.label_emb is None)
+        if labels is not None:
+            embedding = embedding + self.label_emb(labels)
 
         gamma_beta = self.mlp(embedding)
         while len(gamma_beta.shape) < len(x.shape):

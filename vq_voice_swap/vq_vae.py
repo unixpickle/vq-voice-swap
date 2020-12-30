@@ -23,7 +23,6 @@ class VQVAE(nn.Module):
         vq_loss: VQLoss,
         diffusion: Diffusion,
         num_labels: int,
-        embedding_dim: int,
     ):
         super().__init__()
         self.encoder = encoder
@@ -32,8 +31,6 @@ class VQVAE(nn.Module):
         self.vq_loss = vq_loss
         self.diffusion = diffusion
         self.num_labels = num_labels
-        self.embedding_dim = embedding_dim
-        self.label_embeddings = nn.Embedding(num_labels, embedding_dim)
 
     def losses(self, inputs: torch.Tensor, labels: torch.Tensor):
         """
@@ -54,8 +51,9 @@ class VQVAE(nn.Module):
         ts = torch.rand(inputs.shape[0]).to(inputs)
         epsilon = torch.randn_like(inputs)
         noised_inputs = self.diffusion.sample_q(inputs, ts, epsilon=epsilon)
-        cond_seq = vq_out["passthrough"] + self.label_embeddings(labels)[..., None]
-        predictions = self.predictor(noised_inputs, ts, cond=cond_seq)
+        predictions = self.predictor(
+            noised_inputs, ts, cond=vq_out["passthrough"], labels=labels
+        )
         mses = ((predictions - epsilon) ** 2).flatten(1).mean(1)
         mse = mses.mean()
 
@@ -92,12 +90,15 @@ class VQVAE(nn.Module):
         :param progress: if True, show a progress bar with tqdm.
         :return: an [N x 1 x T] Tensor of audio.
         """
-        cond_seq = self.vq.embed(codes) + self.label_embeddings(labels)[..., None]
+        cond_seq = self.vq.embed(codes)
         x_T = torch.randn(
             codes.shape[0], 1, codes.shape[1] * self.downsample_rate()
         ).to(codes.device)
         return self.diffusion.ddpm_sample(
-            x_T, self.predictor.condition(cond=cond_seq), steps=steps, progress=progress
+            x_T,
+            self.predictor.condition(cond=cond_seq, labels=labels),
+            steps=steps,
+            progress=progress,
         )
 
     @abstractmethod
@@ -112,11 +113,10 @@ class WaveGradVQVAE(VQVAE):
         super().__init__(
             encoder=WaveGradEncoder(),
             vq=VQ(512, 512),
-            predictor=WaveGradPredictor(),
+            predictor=WaveGradPredictor(num_labels=num_labels),
             vq_loss=VQLoss(),
             diffusion=Diffusion(ExpSchedule()),
             num_labels=num_labels,
-            embedding_dim=512,
         )
 
     def save(self, path):
