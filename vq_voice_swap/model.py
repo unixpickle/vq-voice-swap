@@ -29,7 +29,7 @@ class WaveGradPredictor(Predictor):
         self.d_blocks = nn.ModuleList(
             [
                 nn.Conv1d(1, 32, 5, padding=2),
-                DBlock(32, 128, 2),
+                DBlock(32, 128, 4),
                 DBlock(128, 128, 2),
                 DBlock(128, 256, 2),
                 DBlock(256, 512, 2),
@@ -41,11 +41,11 @@ class WaveGradPredictor(Predictor):
         self.u_conv_1 = nn.Conv1d(cond_channels, 768, 3, padding=1)
         self.u_blocks = nn.ModuleList(
             [
-                UBlock(768, 512, 512, 4),
+                UBlock(768, 512, 512, 2),
                 UBlock(512, 512, 256, 2),
                 UBlock(512, 256, 128, 2),
                 UBlock(256, 128, 128, 2),
-                UBlock(128, 128, 32, 2),
+                UBlock(128, 128, 32, 4),
             ]
         )
         self.u_conv_2 = nn.Conv1d(128, 1, 3, padding=1)
@@ -81,11 +81,11 @@ class WaveGradEncoder(nn.Module):
         self.cond_channels = cond_channels
         self.d_blocks = nn.Sequential(
             nn.Conv1d(1, 32, 5, padding=2),
-            DBlock(32, 128, 2),
+            DBlock(32, 128, 4),
             DBlock(128, 128, 2),
             DBlock(128, 256, 2),
             DBlock(256, 512, 2),
-            DBlock(512, cond_channels, 4),
+            DBlock(512, cond_channels, 2),
         )
 
     def forward(self, x):
