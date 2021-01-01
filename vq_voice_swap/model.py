@@ -36,17 +36,14 @@ class WaveGradPredictor(Predictor):
                 DBlock(256, 512, 2),
             ]
         )
-        self.film_blocks = nn.ModuleList(
-            [FILM(ch, num_labels=num_labels) for ch in [32, 128, 128, 256, 512]]
-        )
         self.u_conv_1 = nn.Conv1d(cond_channels, 768, 3, padding=1)
         self.u_blocks = nn.ModuleList(
             [
-                UBlock(768, 512, 512, 2),
-                UBlock(512, 512, 256, 2),
-                UBlock(512, 256, 128, 2),
-                UBlock(256, 128, 128, 2),
-                UBlock(128, 128, 32, 4),
+                UBlock(768, 512, 512, 2, num_labels=num_labels),
+                UBlock(512, 512, 256, 2, num_labels=num_labels),
+                UBlock(512, 256, 128, 2, num_labels=num_labels),
+                UBlock(256, 128, 128, 2, num_labels=num_labels),
+                UBlock(128, 128, 32, 4, num_labels=num_labels),
             ]
         )
         self.u_conv_2 = nn.Conv1d(128, 1, 3, padding=1)
@@ -66,13 +63,13 @@ class WaveGradPredictor(Predictor):
 
         d_outputs = []
         d_input = x
-        for block, film_block in zip(self.d_blocks, self.film_blocks):
+        for block in self.d_blocks:
             d_input = block(d_input)
-            d_outputs.append(film_block(d_input, t, labels=labels))
+            d_outputs.append(d_input)
 
         u_input = self.u_conv_1(cond)
         for block in self.u_blocks:
-            u_input = block(u_input, d_outputs.pop())
+            u_input = block(u_input, d_outputs.pop(), t, labels=labels)
         out = self.u_conv_2(u_input)
         return out
 
@@ -100,48 +97,60 @@ class WaveGradEncoder(nn.Module):
 
 
 class UBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, cond_channels, upsample_rate):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        cond_channels: int,
+        upsample_rate: int,
+        num_labels: Optional[int] = None,
+    ):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
+        self.cond_channels = cond_channels
         self.upsample_rate = upsample_rate
 
+        self.film = FILM(cond_channels, out_channels, num_labels=num_labels)
         self.res_transform = nn.Sequential(
             nn.Upsample(scale_factor=upsample_rate),
             nn.Conv1d(in_channels, out_channels, 3, padding=1),
         )
         self.block_1 = nn.Sequential(
-            nn.ReLU(),
+            nn.GELU(),
             nn.Upsample(scale_factor=upsample_rate),
             nn.Conv1d(in_channels, out_channels, 3, padding=1),
         )
-        self.z_linear_1 = nn.Conv1d(cond_channels, out_channels, 1)
         self.block_2 = nn.Sequential(
-            nn.ReLU(), nn.Conv1d(out_channels, out_channels, 3, dilation=2, padding=2)
+            nn.GELU(), nn.Conv1d(out_channels, out_channels, 3, dilation=2, padding=2)
         )
-        self.z_linear_2 = nn.Conv1d(cond_channels, out_channels, 1)
         self.block_3 = nn.Sequential(
-            nn.ReLU(), nn.Conv1d(out_channels, out_channels, 3, dilation=4, padding=4)
+            nn.GELU(), nn.Conv1d(out_channels, out_channels, 3, dilation=4, padding=4)
         )
-        self.z_linear_3 = nn.Conv1d(cond_channels, out_channels, 1)
         self.block_4 = nn.Sequential(
-            nn.ReLU(), nn.Conv1d(out_channels, out_channels, 3, dilation=8, padding=8)
+            nn.GELU(), nn.Conv1d(out_channels, out_channels, 3, dilation=8, padding=8)
         )
 
-    def forward(self, h, z):
+    def forward(
+        self,
+        h: torch.Tensor,
+        z: torch.Tensor,
+        t: torch.Tensor,
+        labels: Optional[torch.Tensor] = None,
+    ):
+        alpha, beta = self.film(z, t, labels=labels)
         res_out = self.res_transform(h)
         output = self.block_1(h)
-        output = output + self.z_linear_1(z)
-        output = self.block_2(output)
+        output = self.block_2(alpha * output + beta)
         output = output + res_out
         res_out = output
-        output = self.block_3(self.z_linear_2(z) + output)
-        output = self.block_4(self.z_linear_3(z) + output)
+        output = self.block_3(alpha * output + beta)
+        output = self.block_4(alpha * output + beta)
         return output + res_out
 
 
 class DBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, downsample_rate):
+    def __init__(self, in_channels: int, out_channels: int, downsample_rate: int):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -153,13 +162,13 @@ class DBlock(nn.Module):
         )
         self.block_1 = nn.Sequential(
             nn.AvgPool1d(downsample_rate, stride=downsample_rate),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Conv1d(in_channels, out_channels, 3, padding=1),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Conv1d(out_channels, out_channels, 3, dilation=2, padding=2),
         )
 
-    def forward(self, h):
+    def forward(self, h: torch.Tensor):
         return self.block_1(h) + self.res_transform(h)
 
 
@@ -169,30 +178,35 @@ class FILM(nn.Module):
 
     The timestep is a floating point in the range [0, 1], whereas the labels
     are integers in the range [0, num_labels).
+
+    The output of a FiLM layer is a tuple (alpha, beta), where alpha is a
+    multiplier and beta is a bias.
     """
 
     def __init__(
-        self, ch: int, num_labels: Optional[int] = None, internal_ch: int = 512
+        self, cond_channels: int, out_channels: int, num_labels: Optional[int] = None
     ):
         super().__init__()
-        assert internal_ch % 2 == 0, "positional embedding must have dim divisible by 2"
-        self.ch = ch
+        assert (
+            out_channels % 2 == 0
+        ), "positional embedding must have dim divisible by 2"
+        self.cond_channels = cond_channels
+        self.out_channels = out_channels
         self.num_labels = num_labels
-        self.internal_ch = internal_ch
-        self.mlp = nn.Sequential(
-            nn.Linear(internal_ch, internal_ch),
-            nn.ReLU(),
-            nn.Linear(internal_ch, ch * 2),
+        self.in_layer = nn.Sequential(
+            nn.Conv1d(cond_channels, out_channels, 3, padding=1),
+            nn.GELU(),
         )
+        self.out_layer = nn.Conv1d(out_channels, out_channels * 2, 3, padding=1)
         if num_labels is not None:
-            self.label_emb = nn.Embedding(num_labels, internal_ch)
+            self.label_emb = nn.Embedding(num_labels, out_channels)
         else:
             self.label_emb = None
 
     def forward(
         self, x: torch.Tensor, t: torch.Tensor, labels: Optional[torch.Tensor] = None
     ):
-        half = self.internal_ch // 2
+        half = self.out_channels // 2
         freqs = torch.exp(
             -math.log(10.0)
             * torch.arange(start=0, end=half, dtype=torch.float32)
@@ -205,9 +219,11 @@ class FILM(nn.Module):
         if labels is not None:
             embedding = embedding + self.label_emb(labels)
 
-        gamma_beta = self.mlp(embedding)
-        while len(gamma_beta.shape) < len(x.shape):
-            gamma_beta = gamma_beta[..., None]
-        gamma, beta = torch.split(gamma_beta, gamma_beta.shape[1] // 2, dim=1)
+        x_out = self.in_layer(x)
+        while len(embedding.shape) < len(x.shape):
+            embedding = embedding[..., None]
 
-        return x * gamma + beta
+        alpha_beta = self.out_layer(embedding + x_out)
+        alpha, beta = torch.split(alpha_beta, self.out_channels, dim=1)
+
+        return alpha, beta
