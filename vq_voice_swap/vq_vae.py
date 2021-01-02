@@ -1,5 +1,6 @@
 from abc import abstractmethod
 import os
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -32,7 +33,7 @@ class VQVAE(nn.Module):
         self.diffusion = diffusion
         self.num_labels = num_labels
 
-    def losses(self, inputs: torch.Tensor, labels: torch.Tensor):
+    def losses(self, inputs: torch.Tensor, labels: torch.Tensor, **extra_kwargs: Any):
         """
         Compute losses for training the VQVAE.
 
@@ -44,7 +45,7 @@ class VQVAE(nn.Module):
                  - "ts": a 1-D float tensor of the timesteps per batch entry.
                  - "mses": a 1-D tensor of the MSE losses per batch entry.
         """
-        encoder_out = self.encoder(inputs)
+        encoder_out = self.encoder(inputs, **extra_kwargs)
         vq_out = self.vq(encoder_out)
         vq_loss = self.vq_loss(encoder_out, vq_out["embedded"])
 
@@ -52,7 +53,7 @@ class VQVAE(nn.Module):
         epsilon = torch.randn_like(inputs)
         noised_inputs = self.diffusion.sample_q(inputs, ts, epsilon=epsilon)
         predictions = self.predictor(
-            noised_inputs, ts, cond=vq_out["passthrough"], labels=labels
+            noised_inputs, ts, cond=vq_out["passthrough"], labels=labels, **extra_kwargs
         )
         mses = ((predictions - epsilon) ** 2).flatten(1).mean(1)
         mse = mses.mean()

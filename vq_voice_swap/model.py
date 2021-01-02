@@ -5,6 +5,7 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
+from torch.utils.checkpoint import checkpoint, checkpoint_sequential
 
 
 class Predictor(nn.Module):
@@ -54,6 +55,7 @@ class WaveGradPredictor(Predictor):
         t: torch.Tensor,
         cond: Optional[torch.Tensor] = None,
         labels: Optional[torch.Tensor] = None,
+        use_checkpoint=False,
     ):
         assert x.shape[2] % 64 == 0, "timesteps must be divisible by 64"
 
@@ -64,12 +66,24 @@ class WaveGradPredictor(Predictor):
         d_outputs = []
         d_input = x
         for block in self.d_blocks:
-            d_input = block(d_input)
+            if use_checkpoint:
+                if not d_input.requires_grad:
+                    d_input = d_input.clone().requires_grad_(True)
+                d_input = checkpoint(block, d_input)
+            else:
+                d_input = block(d_input)
             d_outputs.append(d_input)
 
         u_input = self.u_conv_1(cond)
         for block in self.u_blocks:
-            u_input = block(u_input, d_outputs.pop(), t, labels=labels)
+
+            def run_fn(u_input, d_output, block=block, t=t, labels=labels):
+                return block(u_input, d_output, t, labels=labels)
+
+            if use_checkpoint:
+                u_input = checkpoint(run_fn, u_input, d_outputs.pop())
+            else:
+                u_input = run_fn(u_input, d_outputs.pop())
         out = self.u_conv_2(u_input)
         return out
 
@@ -92,8 +106,13 @@ class WaveGradEncoder(nn.Module):
             DBlock(512, cond_channels, 2),
         )
 
-    def forward(self, x):
-        return self.d_blocks(x)
+    def forward(self, x, use_checkpoint=False):
+        if use_checkpoint:
+            if not x.requires_grad:
+                x = x.clone().requires_grad_()
+            return checkpoint_sequential(self.d_blocks, len(self.d_blocks), x)
+        else:
+            return self.d_blocks(x)
 
 
 class UBlock(nn.Module):

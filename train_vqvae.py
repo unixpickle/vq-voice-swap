@@ -46,7 +46,7 @@ def main():
     for i, data_batch in enumerate(repeat_dataset(data_loader)):
         audio_seq = data_batch["samples"][:, None].to(device)
         labels = data_batch["label"].to(device)
-        losses = model.losses(audio_seq, labels)
+        losses = model.losses(audio_seq, labels, use_checkpoint=args.grad_checkpoint)
         loss = losses["vq_loss"] + losses["mse"]
 
         opt.zero_grad()
@@ -82,6 +82,7 @@ def arg_parser():
     parser.add_argument("--checkpoint-path", default="model_vqvae.pt", type=str)
     parser.add_argument("--ema-path", default="model_vqvae_ema.pt", type=str)
     parser.add_argument("--save-interval", default=500, type=int)
+    parser.add_argument("--grad-checkpoint", action="store_true")
     parser.add_argument("data_dir", type=str)
     return parser
 
