@@ -47,6 +47,7 @@ class WaveGradPredictor(Predictor):
                 UBlock(128, 128, 32, 4, num_labels=num_labels),
             ]
         )
+        self.u_ln = NCTLayerNorm(128)
         self.u_conv_2 = nn.Conv1d(128, 1, 3, padding=1)
         for p in self.u_conv_2.parameters():
             with torch.no_grad():
@@ -87,7 +88,8 @@ class WaveGradPredictor(Predictor):
                 u_input = checkpoint(run_fn, u_input, d_outputs.pop())
             else:
                 u_input = run_fn(u_input, d_outputs.pop())
-        out = self.u_conv_2(u_input)
+        out = self.u_ln(u_input)
+        out = self.u_conv_2(out)
         return out
 
 
@@ -145,15 +147,19 @@ class UBlock(nn.Module):
             nn.Conv1d(in_channels, out_channels, 3, padding=1),
         )
         self.block_1 = nn.Sequential(
+            NCTLayerNorm(in_channels),
             nn.GELU(),
             nn.Upsample(scale_factor=upsample_rate),
             nn.Conv1d(in_channels, out_channels, 3, padding=1),
         )
         self.block_2 = nn.Sequential(
-            nn.GELU(), nn.Conv1d(out_channels, out_channels, 3, dilation=2, padding=2)
+            nn.GELU(),
+            nn.Conv1d(out_channels, out_channels, 3, dilation=2, padding=2),
         )
         self.block_3 = nn.Sequential(
-            nn.GELU(), nn.Conv1d(out_channels, out_channels, 3, dilation=4, padding=4)
+            NCTLayerNorm(out_channels),
+            nn.GELU(),
+            nn.Conv1d(out_channels, out_channels, 3, dilation=4, padding=4),
         )
         self.block_4 = nn.Sequential(
             nn.GELU(), nn.Conv1d(out_channels, out_channels, 3, dilation=8, padding=8)
@@ -188,6 +194,7 @@ class DBlock(nn.Module):
             nn.AvgPool1d(downsample_rate, stride=downsample_rate),
         )
         self.block_1 = nn.Sequential(
+            NCTLayerNorm(in_channels),
             nn.AvgPool1d(downsample_rate, stride=downsample_rate),
             nn.GELU(),
             nn.Conv1d(in_channels, out_channels, 3, padding=1),
@@ -221,6 +228,7 @@ class FILM(nn.Module):
         self.out_channels = out_channels
         self.num_labels = num_labels
         self.in_layer = nn.Sequential(
+            NCTLayerNorm(cond_channels),
             nn.Conv1d(cond_channels, out_channels, 3, padding=1),
             nn.GELU(),
         )
@@ -255,3 +263,19 @@ class FILM(nn.Module):
         alpha, beta = torch.split(alpha_beta, self.out_channels, dim=1)
 
         return inputs * alpha + beta
+
+
+class NCTLayerNorm(nn.Module):
+    """
+    LayerNorm that normalizes channels in NCT tensors.
+    """
+
+    def __init__(self, ch: int):
+        super().__init__()
+        self.ln = nn.LayerNorm((ch,))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x.permute(0, 2, 1).contiguous()
+        x = self.ln(x)
+        x = x.permute(0, 2, 1).contiguous()
+        return x
