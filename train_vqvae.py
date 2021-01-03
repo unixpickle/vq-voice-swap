@@ -28,6 +28,8 @@ def main():
     else:
         print("creating new model...")
         model = WaveGradVQVAE(num_labels)
+        print("initializing weight scale...")
+        model.init_scale()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)

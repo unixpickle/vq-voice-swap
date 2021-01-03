@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 
 from .diffusion import Diffusion
+from .init_scale import init_scale
 from .model import Predictor, WaveGradEncoder, WaveGradPredictor
 from .schedule import ExpSchedule
 from .vq import VQ, VQLoss
@@ -32,6 +33,23 @@ class VQVAE(nn.Module):
         self.vq_loss = vq_loss
         self.diffusion = diffusion
         self.num_labels = num_labels
+
+    def init_scale(self):
+        """
+        Re-scale the model weights to a well-behaved regime.
+        """
+        first_param = next(self.parameters())
+        inputs = torch.randn(8, 1, 64000).to(first_param)
+        labels = torch.randint(0, self.num_labels, inputs.shape[:1]).to(
+            first_param.device
+        )
+        init_scale(self.encoder, inputs)
+        with torch.no_grad():
+            encoder_out = self.encoder(inputs)
+        ts = torch.linspace(0, 1, inputs.shape[0]).to(inputs)
+        epsilon = torch.randn_like(inputs)
+        noised_inputs = self.diffusion.sample_q(inputs, ts, epsilon=epsilon)
+        init_scale(self.predictor, noised_inputs, ts, cond=encoder_out, labels=labels)
 
     def losses(self, inputs: torch.Tensor, labels: torch.Tensor, **extra_kwargs: Any):
         """

@@ -48,6 +48,9 @@ class WaveGradPredictor(Predictor):
             ]
         )
         self.u_conv_2 = nn.Conv1d(128, 1, 3, padding=1)
+        for p in self.u_conv_2.parameters():
+            with torch.no_grad():
+                p.zero_()
 
     def forward(
         self,
