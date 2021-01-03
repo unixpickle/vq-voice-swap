@@ -133,7 +133,13 @@ class UBlock(nn.Module):
         self.cond_channels = cond_channels
         self.upsample_rate = upsample_rate
 
-        self.film = FILM(cond_channels, out_channels, num_labels=num_labels)
+        def make_film():
+            return FILM(cond_channels, out_channels, num_labels=num_labels)
+
+        self.film_1 = make_film()
+        self.film_2 = make_film()
+        self.film_3 = make_film()
+
         self.res_transform = nn.Sequential(
             nn.Upsample(scale_factor=upsample_rate),
             nn.Conv1d(in_channels, out_channels, 3, padding=1),
@@ -160,14 +166,13 @@ class UBlock(nn.Module):
         t: torch.Tensor,
         labels: Optional[torch.Tensor] = None,
     ):
-        alpha, beta = self.film(z, t, labels=labels)
         res_out = self.res_transform(h)
         output = self.block_1(h)
-        output = self.block_2(alpha * output + beta)
+        output = self.block_2(self.film_1(output, z, t, labels=labels))
         output = output + res_out
         res_out = output
-        output = self.block_3(alpha * output + beta)
-        output = self.block_4(alpha * output + beta)
+        output = self.block_3(self.film_2(output, z, t, labels=labels))
+        output = self.block_4(self.film_3(output, z, t, labels=labels))
         return output + res_out
 
 
@@ -226,26 +231,27 @@ class FILM(nn.Module):
             self.label_emb = None
 
     def forward(
-        self, x: torch.Tensor, t: torch.Tensor, labels: Optional[torch.Tensor] = None
+        self,
+        inputs: torch.Tensor,
+        cond: torch.Tensor,
+        t: torch.Tensor,
+        labels: Optional[torch.Tensor] = None,
     ):
         half = self.out_channels // 2
         freqs = torch.exp(
             -math.log(10.0)
             * torch.arange(start=0, end=half, dtype=torch.float32)
             / half
-        ).to(x)
-        args = t[:, None].to(x.dtype) * freqs[None]
+        ).to(cond)
+        args = t[:, None].to(cond.dtype) * freqs[None]
         embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
-
         assert (labels is None) == (self.label_emb is None)
         if labels is not None:
             embedding = embedding + self.label_emb(labels)
-
-        x_out = self.in_layer(x)
-        while len(embedding.shape) < len(x.shape):
+        while len(embedding.shape) < len(cond.shape):
             embedding = embedding[..., None]
-
-        alpha_beta = self.out_layer(embedding + x_out)
+        cond_out = self.in_layer(cond)
+        alpha_beta = self.out_layer(embedding + cond_out)
         alpha, beta = torch.split(alpha_beta, self.out_channels, dim=1)
 
-        return alpha, beta
+        return inputs * alpha + beta
