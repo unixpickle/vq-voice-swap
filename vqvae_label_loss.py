@@ -62,6 +62,7 @@ def arg_parser():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
+    parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("checkpoint_path", type=str)
     parser.add_argument("data_dir", type=str)
     return parser
