@@ -54,7 +54,7 @@ def main():
 
         num_samples += len(labels)
         print(
-            f"{num_samples} samples: true_mse={np.mean(true_mse)} rand_mse={np.mean(rand_mse)}"
+            f"{num_samples} samples: true_mse={np.mean(true_mses)} rand_mse={np.mean(rand_mses)}"
         )
 
 
