@@ -183,11 +183,18 @@ class UBlock(nn.Module):
 
 
 class DBlock(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, downsample_rate: int):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        downsample_rate: int,
+        extra_blocks: int = 0,
+    ):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.downsample_rate = downsample_rate
+        self.extra_blocks = extra_blocks
 
         self.res_transform = nn.Sequential(
             nn.Conv1d(in_channels, out_channels, 3, padding=1),
@@ -201,9 +208,24 @@ class DBlock(nn.Module):
             nn.GELU(),
             nn.Conv1d(out_channels, out_channels, 3, dilation=2, padding=2),
         )
+        self.extra = nn.ModuleList(
+            [
+                nn.Sequential(
+                    NCTLayerNorm(out_channels),
+                    nn.GELU(),
+                    nn.Conv1d(out_channels, out_channels, 3, padding=1),
+                    nn.GELU(),
+                    nn.Conv1d(out_channels, out_channels, 3, dilation=2, padding=2),
+                )
+                for _ in range(extra_blocks)
+            ]
+        )
 
     def forward(self, h: torch.Tensor):
-        return self.block_1(h) + self.res_transform(h)
+        res = self.block_1(h) + self.res_transform(h)
+        for block in self.extra:
+            res = res + block(res)
+        return res
 
 
 class FILM(nn.Module):
