@@ -10,6 +10,7 @@ from torch.optim import AdamW
 
 from vq_voice_swap.dataset import create_data_loader
 from vq_voice_swap.ema import ModelEMA
+from vq_voice_swap.logger import Logger
 from vq_voice_swap.loss_tracker import LossTracker
 from vq_voice_swap.vq_vae import WaveGradVQVAE
 
@@ -23,10 +24,12 @@ def main():
 
     if os.path.exists(args.checkpoint_path):
         print("loading from checkpoint...")
+        resume = True
         model = WaveGradVQVAE.load(args.checkpoint_path)
         assert model.num_labels == num_labels
     else:
         print("creating new model...")
+        resume = False
         model = WaveGradVQVAE(num_labels)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -42,6 +45,7 @@ def main():
 
     opt = AdamW(model.parameters(), lr=args.lr)
     lt = LossTracker()
+    logger = Logger(args.log_file, resume=resume)
 
     for i, data_batch in enumerate(repeat_dataset(data_loader)):
         audio_seq = data_batch["samples"][:, None].to(device)
@@ -58,8 +62,11 @@ def main():
 
         step = i + 1
         lt.add(losses["ts"], losses["mses"])
-        print(
-            f"step {step}: vq_loss={losses['vq_loss'].item()} mse={losses['mse'].item()} {lt.log_str()}"
+        logger.log(
+            step,
+            vq_loss=losses["vq_loss"].item(),
+            mse=losses["mse"].item(),
+            **lt.log_dict()
         )
         if step % args.save_interval == 0:
             model.save(args.checkpoint_path)
@@ -83,6 +90,7 @@ def arg_parser():
     parser.add_argument("--ema-path", default="model_vqvae_ema.pt", type=str)
     parser.add_argument("--save-interval", default=500, type=int)
     parser.add_argument("--grad-checkpoint", action="store_true")
+    parser.add_argument("--log-file", default="train_log.txt")
     parser.add_argument("data_dir", type=str)
     return parser
 

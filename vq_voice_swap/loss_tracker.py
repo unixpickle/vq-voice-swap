@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 import torch
@@ -28,6 +28,6 @@ class LossTracker:
     def quantile_averages(self) -> List[Optional[float]]:
         return [float(np.mean(x)) if len(x) else None for x in self.history]
 
-    def log_str(self) -> str:
+    def log_dict(self) -> Dict[str, float]:
         avgs = self.quantile_averages()
-        return " ".join(f"q{i}={avg}" for i, avg in enumerate(avgs) if avg is not None)
+        return {f"q{i}": avg for i, avg in enumerate(avgs) if avg is not None}
