@@ -51,7 +51,7 @@ class Logger:
     def log(self, step: int, **kwargs):
         fields = " ".join(f"{k}={v:.05f}" for k, v in kwargs.items())
         log_line = f"step {step + self.start_step}: {fields}"
-        self.out_file.write(log_line)
+        self.out_file.write(log_line + "\n")
         self.out_file.flush()
         print(log_line)
 
