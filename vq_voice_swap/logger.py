@@ -7,6 +7,10 @@ def read_log(log_reader: Union[str, TextIO]):
 
     Returns an iterator over (step, dict) pairs.
     """
+    if isinstance(log_reader, str):
+        with open(log_reader, "rt") as f:
+            yield from read_log(f)
+            return
     line_idx = 0
     while True:
         line = log_reader.readline().rstrip()
