@@ -162,7 +162,8 @@ class UBlock(nn.Module):
             nn.Conv1d(out_channels, out_channels, 3, dilation=4, padding=4),
         )
         self.block_4 = nn.Sequential(
-            nn.GELU(), nn.Conv1d(out_channels, out_channels, 3, dilation=8, padding=8)
+            nn.GELU(), nn.Conv1d(out_channels, out_channels, 3, dilation=8, padding=8),
+            nn.GELU(), nn.Conv1d(out_channels, out_channels, 3, dilation=16, padding=16)
         )
 
     def forward(
@@ -215,7 +216,9 @@ class DBlock(nn.Module):
                     nn.GELU(),
                     nn.Conv1d(out_channels, out_channels, 3, padding=1),
                     nn.GELU(),
-                    nn.Conv1d(out_channels, out_channels, 3, dilation=2, padding=2),
+                    nn.Conv1d(out_channels, out_channels, 3, dilation=4, padding=4),
+                    nn.GELU(),
+                    nn.Conv1d(out_channels, out_channels, 3, dilation=8, padding=8),
                 )
                 for _ in range(extra_blocks)
             ]
