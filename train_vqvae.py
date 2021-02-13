@@ -1,5 +1,5 @@
 """
-Train an unconditional diffusion model on waveforms.
+Train an VQ-VAE + diffusion model on waveforms.
 """
 
 import argparse
