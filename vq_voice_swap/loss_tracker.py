@@ -10,9 +10,10 @@ class LossTracker:
     quantiles of the diffusion loss function.
     """
 
-    def __init__(self, quantiles: int = 4, avg_size: int = 1000):
+    def __init__(self, quantiles: int = 4, avg_size: int = 1000, prefix: str = ""):
         self.quantiles = quantiles
         self.avg_size = avg_size
+        self.prefix = prefix
         self.history = [[] for _ in range(quantiles)]
 
     def add(self, ts: torch.Tensor, mses: torch.Tensor):
@@ -30,4 +31,6 @@ class LossTracker:
 
     def log_dict(self) -> Dict[str, float]:
         avgs = self.quantile_averages()
-        return {f"q{i}": avg for i, avg in enumerate(avgs) if avg is not None}
+        return {
+            f"{self.prefix}q{i}": avg for i, avg in enumerate(avgs) if avg is not None
+        }
