@@ -199,6 +199,8 @@ class CascadeWaveGradVQVAE(WaveGradVQVAE):
             num_labels=num_labels,
             base_channels=base_channels,
         )
+        self.lg_cond_scale = nn.Parameter(torch.ones(()))
+        self.lg_label_scale = nn.Parameter(torch.ones(()))
         self.base_predictor = WaveGradPredictor(base_channels=base_channels)
         self.label_predictor = WaveGradPredictor(
             base_channels=base_channels,
@@ -210,8 +212,13 @@ class CascadeWaveGradVQVAE(WaveGradVQVAE):
     ) -> Dict[str, torch.Tensor]:
         extra = {k: v for k, v in kwargs.items() if k not in ["labels", "cond"]}
         base = self.base_predictor(xs, ts, **extra)
-        label = base.detach() + self.label_predictor(
-            xs, ts, labels=kwargs["labels"], **extra
+        label = (
+            base.detach()
+            + self.label_predictor(xs, ts, labels=kwargs["labels"], **extra)
+            * self.lg_label_scale.exp()
         )
-        cond = label.detach() + self.cond_predictor(xs, ts, **kwargs)
+        cond = (
+            label.detach()
+            + self.cond_predictor(xs, ts, **kwargs) * self.lg_cond_scale.exp()
+        )
         return dict(base=base, label=label, cond=cond)
