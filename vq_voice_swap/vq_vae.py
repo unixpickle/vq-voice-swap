@@ -1,12 +1,12 @@
-from abc import abstractmethod, abstractproperty
+from abc import abstractmethod
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import torch
 import torch.nn as nn
 
 from .diffusion import Diffusion
-from .model import Predictor, WaveGradEncoder, WaveGradPredictor
+from .model import WaveGradEncoder, WaveGradPredictor
 from .schedule import ExpSchedule
 from .vq import VQ, VQLoss
 
@@ -208,17 +208,22 @@ class CascadeWaveGradVQVAE(WaveGradVQVAE):
         )
 
     def predictions(
-        self, xs: torch.Tensor, ts: torch.Tensor, **kwargs
+        self,
+        xs: torch.Tensor,
+        ts: torch.Tensor,
+        cond: Optional[torch.Tensor] = None,
+        labels: Optional[torch.Tensor] = None,
+        **kwargs
     ) -> Dict[str, torch.Tensor]:
-        extra = {k: v for k, v in kwargs.items() if k not in ["labels", "cond"]}
-        base = self.base_predictor(xs, ts, **extra)
+        base = self.base_predictor(xs, ts, **kwargs)
         label = (
             base.detach()
-            + self.label_predictor(xs, ts, labels=kwargs["labels"], **extra)
+            + self.label_predictor(xs, ts, labels=labels, **kwargs)
             * self.lg_label_scale.exp()
         )
         cond = (
             label.detach()
-            + self.cond_predictor(xs, ts, **kwargs) * self.lg_cond_scale.exp()
+            + self.cond_predictor(xs, ts, cond=cond, labels=labels, **kwargs)
+            * self.lg_cond_scale.exp()
         )
         return dict(base=base, label=label, cond=cond)
