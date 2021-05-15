@@ -213,5 +213,5 @@ class CascadeWaveGradVQVAE(WaveGradVQVAE):
         label = base.detach() + self.label_predictor(
             xs, ts, labels=kwargs["labels"], **extra
         )
-        cond = label.detach() + self.label_predictor(xs, ts, **kwargs)
+        cond = label.detach() + self.cond_predictor(xs, ts, **kwargs)
         return dict(base=base, label=label, cond=cond)
