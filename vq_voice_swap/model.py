@@ -27,12 +27,12 @@ class WaveGradPredictor(Predictor):
 
     def __init__(
         self,
-        cond_channels: int = 512,
+        cond_mult: int = 16,
         base_channels: int = 32,
         num_labels: Optional[int] = None,
     ):
         super().__init__()
-        self.cond_channels = cond_channels
+        self.cond_channels = cond_mult * base_channels
         self.base_channels = base_channels
         self.d_blocks = nn.ModuleList(
             [
@@ -43,7 +43,7 @@ class WaveGradPredictor(Predictor):
                 DBlock(base_channels * 8, base_channels * 16, 2),
             ]
         )
-        self.u_conv_1 = nn.Conv1d(cond_channels, base_channels * 24, 3, padding=1)
+        self.u_conv_1 = nn.Conv1d(self.cond_channels, base_channels * 24, 3, padding=1)
         self.u_blocks = nn.ModuleList(
             [
                 UBlock(
@@ -135,16 +135,16 @@ class WaveGradEncoder(nn.Module):
     waveforms.
     """
 
-    def __init__(self, cond_channels: int = 512, base_channels: int = 32):
+    def __init__(self, cond_mult: int = 16, base_channels: int = 32):
         super().__init__()
-        self.cond_channels = cond_channels
+        self.cond_channels = cond_mult * base_channels
         self.d_blocks = nn.Sequential(
             nn.Conv1d(1, base_channels, 5, padding=2),
             DBlock(base_channels, base_channels * 4, 4, extra_blocks=1),
             DBlock(base_channels * 4, base_channels * 4, 2, extra_blocks=1),
             DBlock(base_channels * 4, base_channels * 8, 2, extra_blocks=1),
             DBlock(base_channels * 8, base_channels * 16, 2, extra_blocks=1),
-            DBlock(base_channels * 16, cond_channels, 2, extra_blocks=1),
+            DBlock(base_channels * 16, self.cond_channels, 2, extra_blocks=1),
         )
 
     def forward(self, x, use_checkpoint=False):

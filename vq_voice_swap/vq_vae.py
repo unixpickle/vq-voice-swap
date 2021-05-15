@@ -137,9 +137,10 @@ class VQVAE(nn.Module):
 
 class WaveGradVQVAE(VQVAE):
     def __init__(self, num_labels: int, base_channels: int = 32):
+        encoder = WaveGradEncoder(base_channels=base_channels)
         super().__init__(
-            encoder=WaveGradEncoder(base_channels=base_channels),
-            vq=VQ(512, 512),
+            encoder=encoder,
+            vq=VQ(encoder.cond_channels, 512),
             vq_loss=VQLoss(),
             diffusion=Diffusion(ExpSchedule()),
             num_labels=num_labels,

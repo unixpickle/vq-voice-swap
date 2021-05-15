@@ -5,6 +5,7 @@ Train an VQ-VAE + diffusion model on waveforms.
 import argparse
 import os
 
+import numpy as np
 import torch
 from torch.optim import AdamW
 
@@ -12,7 +13,7 @@ from vq_voice_swap.dataset import create_data_loader
 from vq_voice_swap.ema import ModelEMA
 from vq_voice_swap.logger import Logger
 from vq_voice_swap.loss_tracker import LossTracker
-from vq_voice_swap.vq_vae import WaveGradVQVAE
+from vq_voice_swap.vq_vae import CascadeWaveGradVQVAE
 
 
 def main():
@@ -25,12 +26,14 @@ def main():
     if os.path.exists(args.checkpoint_path):
         print("loading from checkpoint...")
         resume = True
-        model = WaveGradVQVAE.load(args.checkpoint_path)
+        model = CascadeWaveGradVQVAE.load(args.checkpoint_path)
         assert model.num_labels == num_labels
     else:
         print("creating new model...")
         resume = False
-        model = WaveGradVQVAE(num_labels, base_channels=args.base_channels)
+        model = CascadeWaveGradVQVAE(num_labels, base_channels=args.base_channels)
+
+    print(f"total parameters: {count_params(model)}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -44,7 +47,7 @@ def main():
     )
 
     opt = AdamW(model.parameters(), lr=args.lr)
-    lt = LossTracker()
+    trackers = {key: LossTracker(prefix=f"{key}_") for key in ["base", "label", "cond"]}
     logger = Logger(args.log_file, resume=resume)
 
     for i, data_batch in enumerate(repeat_dataset(data_loader)):
@@ -61,12 +64,12 @@ def main():
         model.vq.revive_dead_entries()
 
         step = i + 1
-        lt.add(losses["ts"], losses["mses"])
+        log_dict = {}
+        for key, mses in losses["mses_dict"].items():
+            trackers[key].add(losses["ts"], mses)
+            log_dict.update(trackers[key].log_dict())
         logger.log(
-            step,
-            vq_loss=losses["vq_loss"].item(),
-            mse=losses["mse"].item(),
-            **lt.log_dict()
+            step, vq_loss=losses["vq_loss"].item(), mse=losses["mse"].item(), **log_dict
         )
         if step % args.save_interval == 0:
             model.save(args.checkpoint_path)
@@ -76,6 +79,10 @@ def main():
 def repeat_dataset(data_loader):
     while True:
         yield from data_loader
+
+
+def count_params(model):
+    return sum(np.prod(x.shape) for x in model.parameters())
 
 
 def arg_parser():
