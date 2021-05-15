@@ -208,9 +208,10 @@ class CascadeWaveGradVQVAE(WaveGradVQVAE):
     def predictions(
         self, xs: torch.Tensor, ts: torch.Tensor, **kwargs
     ) -> Dict[str, torch.Tensor]:
-        base = self.base_predictor(xs, ts)
-        label = base.detach() + self.label_predictor(xs, ts, labels=kwargs["labels"])
-        cond = label.detach() + self.label_predictor(
-            xs, ts, cond=kwargs["cond"], labels=kwargs["labels"]
+        extra = {k: v for k, v in kwargs.items() if k not in ["labels", "cond"]}
+        base = self.base_predictor(xs, ts, **extra)
+        label = base.detach() + self.label_predictor(
+            xs, ts, labels=kwargs["labels"], **extra
         )
+        cond = label.detach() + self.label_predictor(xs, ts, **kwargs)
         return dict(base=base, label=label, cond=cond)
