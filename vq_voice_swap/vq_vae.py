@@ -110,15 +110,18 @@ class VQVAE(nn.Module):
 
 
 class WaveGradVQVAE(VQVAE):
-    def __init__(self, num_labels: int):
+    def __init__(self, num_labels: int, base_channels: int = 32):
         super().__init__(
-            encoder=WaveGradEncoder(),
+            encoder=WaveGradEncoder(base_channels=base_channels),
             vq=VQ(512, 512),
-            predictor=WaveGradPredictor(num_labels=num_labels),
+            predictor=WaveGradPredictor(
+                base_channels=base_channels, num_labels=num_labels
+            ),
             vq_loss=VQLoss(),
             diffusion=Diffusion(ExpSchedule()),
             num_labels=num_labels,
         )
+        self.base_channels = base_channels
 
     def save(self, path):
         """
@@ -126,7 +129,10 @@ class WaveGradVQVAE(VQVAE):
         file.
         """
         state = {
-            "kwargs": {"num_labels": self.num_labels},
+            "kwargs": {
+                "num_labels": self.num_labels,
+                "base_channels": self.base_channels,
+            },
             "state_dict": self.state_dict(),
         }
         tmp_path = path + ".tmp"

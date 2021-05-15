@@ -25,30 +25,66 @@ class WaveGradPredictor(Predictor):
     and WaveGrad (https://arxiv.org/abs/2009.00713).
     """
 
-    def __init__(self, cond_channels: int = 512, num_labels: Optional[int] = None):
+    def __init__(
+        self,
+        cond_channels: int = 512,
+        base_channels: int = 32,
+        num_labels: Optional[int] = None,
+    ):
         super().__init__()
         self.cond_channels = cond_channels
+        self.base_channels = base_channels
         self.d_blocks = nn.ModuleList(
             [
-                nn.Conv1d(1, 32, 5, padding=2),
-                DBlock(32, 128, 4),
-                DBlock(128, 128, 2),
-                DBlock(128, 256, 2),
-                DBlock(256, 512, 2),
+                nn.Conv1d(1, base_channels, 5, padding=2),
+                DBlock(base_channels, base_channels * 4, 4),
+                DBlock(base_channels * 4, base_channels * 4, 2),
+                DBlock(base_channels * 4, base_channels * 8, 2),
+                DBlock(base_channels * 8, base_channels * 16, 2),
             ]
         )
-        self.u_conv_1 = nn.Conv1d(cond_channels, 768, 3, padding=1)
+        self.u_conv_1 = nn.Conv1d(cond_channels, base_channels * 24, 3, padding=1)
         self.u_blocks = nn.ModuleList(
             [
-                UBlock(768, 512, 512, 2, num_labels=num_labels),
-                UBlock(512, 512, 256, 2, num_labels=num_labels),
-                UBlock(512, 256, 128, 2, num_labels=num_labels),
-                UBlock(256, 128, 128, 2, num_labels=num_labels),
-                UBlock(128, 128, 32, 4, num_labels=num_labels),
+                UBlock(
+                    base_channels * 24,
+                    base_channels * 16,
+                    base_channels * 16,
+                    2,
+                    num_labels=num_labels,
+                ),
+                UBlock(
+                    base_channels * 16,
+                    base_channels * 16,
+                    base_channels * 8,
+                    2,
+                    num_labels=num_labels,
+                ),
+                UBlock(
+                    base_channels * 16,
+                    base_channels * 8,
+                    base_channels * 4,
+                    2,
+                    num_labels=num_labels,
+                ),
+                UBlock(
+                    base_channels * 8,
+                    base_channels * 4,
+                    base_channels * 4,
+                    2,
+                    num_labels=num_labels,
+                ),
+                UBlock(
+                    base_channels * 4,
+                    base_channels * 4,
+                    base_channels,
+                    4,
+                    num_labels=num_labels,
+                ),
             ]
         )
-        self.u_ln = NCTLayerNorm(128)
-        self.u_conv_2 = nn.Conv1d(128, 1, 3, padding=1)
+        self.u_ln = NCTLayerNorm(base_channels * 4)
+        self.u_conv_2 = nn.Conv1d(base_channels * 4, 1, 3, padding=1)
         for p in self.u_conv_2.parameters():
             with torch.no_grad():
                 p.zero_()
@@ -99,16 +135,16 @@ class WaveGradEncoder(nn.Module):
     waveforms.
     """
 
-    def __init__(self, cond_channels: int = 512):
+    def __init__(self, cond_channels: int = 512, base_channels: int = 32):
         super().__init__()
         self.cond_channels = cond_channels
         self.d_blocks = nn.Sequential(
-            nn.Conv1d(1, 32, 5, padding=2),
-            DBlock(32, 128, 4, extra_blocks=1),
-            DBlock(128, 128, 2, extra_blocks=1),
-            DBlock(128, 256, 2, extra_blocks=1),
-            DBlock(256, 512, 2, extra_blocks=1),
-            DBlock(512, cond_channels, 2, extra_blocks=1),
+            nn.Conv1d(1, base_channels, 5, padding=2),
+            DBlock(base_channels, base_channels * 4, 4, extra_blocks=1),
+            DBlock(base_channels * 4, base_channels * 4, 2, extra_blocks=1),
+            DBlock(base_channels * 4, base_channels * 8, 2, extra_blocks=1),
+            DBlock(base_channels * 8, base_channels * 16, 2, extra_blocks=1),
+            DBlock(base_channels * 16, cond_channels, 2, extra_blocks=1),
         )
 
     def forward(self, x, use_checkpoint=False):
@@ -162,8 +198,10 @@ class UBlock(nn.Module):
             nn.Conv1d(out_channels, out_channels, 3, dilation=4, padding=4),
         )
         self.block_4 = nn.Sequential(
-            nn.GELU(), nn.Conv1d(out_channels, out_channels, 3, dilation=8, padding=8),
-            nn.GELU(), nn.Conv1d(out_channels, out_channels, 3, dilation=16, padding=16)
+            nn.GELU(),
+            nn.Conv1d(out_channels, out_channels, 3, dilation=8, padding=8),
+            nn.GELU(),
+            nn.Conv1d(out_channels, out_channels, 3, dilation=16, padding=16),
         )
 
     def forward(

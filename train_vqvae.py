@@ -30,7 +30,7 @@ def main():
     else:
         print("creating new model...")
         resume = False
-        model = WaveGradVQVAE(num_labels)
+        model = WaveGradVQVAE(num_labels, base_channels=args.base_channels)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -82,6 +82,7 @@ def arg_parser():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
+    parser.add_argument("--base-channels", default=32, type=int)
     parser.add_argument("--lr", default=1e-4, type=float)
     parser.add_argument("--batch-size", default=8, type=int)
     parser.add_argument("--ema-rate", default=0.9999, type=float)
