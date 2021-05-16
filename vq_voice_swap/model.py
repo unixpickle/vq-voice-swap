@@ -300,6 +300,7 @@ class FILM(nn.Module):
         self.out_layer = nn.Conv1d(out_channels, out_channels * 2, 3, padding=1)
         if num_labels is not None:
             self.label_emb = nn.Embedding(num_labels, out_channels)
+            self.label_emb_mix = nn.Linear(out_channels, out_channels)
         else:
             self.label_emb = None
 
@@ -321,7 +322,7 @@ class FILM(nn.Module):
         embedding = self.time_mix(embedding)
         assert (labels is None) == (self.label_emb is None)
         if labels is not None:
-            embedding = embedding + self.label_emb(labels)
+            embedding = embedding + self.label_emb_mix(self.label_emb(labels))
         while len(embedding.shape) < len(cond.shape):
             embedding = embedding[..., None]
         cond_out = self.in_layer(cond)
