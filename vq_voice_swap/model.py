@@ -5,6 +5,7 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint, checkpoint_sequential
 
 
@@ -295,10 +296,7 @@ class FILM(nn.Module):
             nn.Conv1d(cond_channels, out_channels, 3, padding=1),
             nn.GELU(),
         )
-        self.time_embed = nn.Sequential(
-            nn.Linear(out_channels, out_channels),
-            nn.GELU(),
-        )
+        self.time_mix = nn.Linear(out_channels, out_channels)
         self.out_layer = nn.Conv1d(out_channels, out_channels * 2, 3, padding=1)
         if num_labels is not None:
             self.label_emb = nn.Embedding(num_labels, out_channels)
@@ -320,14 +318,14 @@ class FILM(nn.Module):
         ).to(cond)
         args = t[:, None].to(cond.dtype) * freqs[None]
         embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
-        embedding = self.time_embed(embedding)
+        embedding = self.time_mix(embedding)
         assert (labels is None) == (self.label_emb is None)
         if labels is not None:
             embedding = embedding + self.label_emb(labels)
         while len(embedding.shape) < len(cond.shape):
             embedding = embedding[..., None]
         cond_out = self.in_layer(cond)
-        alpha_beta = self.out_layer(embedding + cond_out)
+        alpha_beta = self.out_layer(F.gelu(embedding + cond_out))
         alpha, beta = torch.split(alpha_beta, self.out_channels, dim=1)
 
         return inputs * (alpha + 1) + beta
