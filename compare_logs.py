@@ -1,6 +1,18 @@
 """
-Compare a value throughout training for multiple runs, plotted on the same
-figure.
+Plot one or more values throughout training from one or more logs, showing
+them on the same plot for easy comparison.
+
+Pass log keys to the `--fields` flag, for example `--fields mse base_q0`.
+Keys can be regular expressions, such as `base.*`, to average values.
+
+The final (plain) arguments are `log_file [log_file_1 ...] output_image`.
+Each log file is plotted separately, and the legend will indicate which plots
+are from which log file. This makes it easy to compare runs.
+
+As an example, here's how to compare three fields across two runs:
+
+    python compare_logs.py --fields base_q0 label_q0 cond_q0 -- log1.txt log2.txt out.png
+
 """
 
 import argparse
