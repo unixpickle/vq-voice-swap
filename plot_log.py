@@ -1,5 +1,5 @@
 """
-Train an unconditional diffusion model on waveforms.
+Plot the MSE over a run from its log file.
 """
 
 import argparse
