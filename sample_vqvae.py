@@ -42,16 +42,14 @@ def main():
     else:
         if args.label:
             labels = torch.tensor([args.label]).long().to(device)
-            key = "label"
+            pred = model.base_predictor
         else:
             labels = None
-            key = "base"
+            pred = model.label_predictor
         x_T = torch.randn(1, 1, args.seconds * args.sample_rate).to(device)
         sample = model.diffusion.ddpm_sample(
             x_T,
-            lambda xs, ts, **kwargs: model.predictions(xs, ts, labels=labels, **kwargs)[
-                key
-            ],
+            lambda xs, ts, **kwargs: pred(xs, ts, labels=labels, **kwargs),
             steps=args.sample_steps,
             progress=True,
         )
