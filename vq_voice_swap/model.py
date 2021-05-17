@@ -284,22 +284,30 @@ class FILM(nn.Module):
         self, cond_channels: int, out_channels: int, num_labels: Optional[int] = None
     ):
         super().__init__()
-        assert (
-            out_channels % 2 == 0
-        ), "positional embedding must have dim divisible by 2"
         self.cond_channels = cond_channels
         self.out_channels = out_channels
+        self.hidden_channels = out_channels * 2
         self.num_labels = num_labels
-        self.in_layer = nn.Sequential(
+        self.time_emb = nn.Linear(self.hidden_channels, self.hidden_channels)
+        self.cond_emb = nn.Sequential(
             NCTLayerNorm(cond_channels),
-            nn.Conv1d(cond_channels, out_channels, 3, padding=1),
-            nn.GELU(),
+            nn.Conv1d(cond_channels, self.hidden_channels, 3, padding=1),
         )
-        self.out_layer = nn.Conv1d(out_channels, out_channels * 2, 3, padding=1)
         if num_labels is not None:
-            self.label_emb = nn.Embedding(num_labels, out_channels)
+            self.label_emb = nn.Embedding(num_labels, self.hidden_channels)
+            # Random initial label embeddings appears to hurt performance.
+            with torch.no_grad():
+                self.label_emb.weight.zero_()
         else:
             self.label_emb = None
+        self.out_layer = nn.Sequential(
+            nn.GELU(),
+            nn.Conv1d(self.hidden_channels, out_channels * 2, 3, padding=1),
+        )
+        # Start off with little conditioning signal.
+        with torch.no_grad():
+            self.out_layer[1].weight.mul_(0.1)
+            self.out_layer[1].bias.mul_(0.0)
 
     def forward(
         self,
@@ -308,24 +316,29 @@ class FILM(nn.Module):
         t: torch.Tensor,
         labels: Optional[torch.Tensor] = None,
     ):
-        half = self.out_channels // 2
-        freqs = torch.exp(
-            -math.log(10.0)
-            * torch.arange(start=0, end=half, dtype=torch.float32)
-            / half
-        ).to(cond)
+        half = self.hidden_channels // 2
+        min_coeff = 0.1
+        max_coeff = 100.0
+        freqs = (
+            torch.exp(
+                -math.log(max_coeff / min_coeff)
+                * torch.arange(start=0, end=half, dtype=torch.float32)
+                / (half - 1)
+            ).to(cond)
+            * max_coeff
+        )
         args = t[:, None].to(cond.dtype) * freqs[None]
         embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
+        embedding = self.time_emb(embedding)
         assert (labels is None) == (self.label_emb is None)
         if labels is not None:
             embedding = embedding + self.label_emb(labels)
         while len(embedding.shape) < len(cond.shape):
             embedding = embedding[..., None]
-        cond_out = self.in_layer(cond)
-        alpha_beta = self.out_layer(embedding + cond_out)
+        embedding = embedding + self.cond_emb(cond)
+        alpha_beta = self.out_layer(embedding)
         alpha, beta = torch.split(alpha_beta, self.out_channels, dim=1)
-
-        return inputs * alpha + beta
+        return inputs * (1 + alpha) + beta
 
 
 class NCTLayerNorm(nn.Module):
