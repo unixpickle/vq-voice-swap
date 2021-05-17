@@ -42,10 +42,10 @@ def main():
     else:
         if args.label:
             labels = torch.tensor([args.label]).long().to(device)
-            pred = model.base_predictor
+            pred = model.label_predictor
         else:
             labels = None
-            pred = model.label_predictor
+            pred = model.base_predictor
         x_T = torch.randn(1, 1, args.seconds * args.sample_rate).to(device)
         sample = model.diffusion.ddpm_sample(
             x_T,
