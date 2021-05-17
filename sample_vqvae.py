@@ -13,27 +13,48 @@ from vq_voice_swap.vq_vae import CascadeWaveGradVQVAE
 def main():
     args = arg_parser().parse_args()
 
+    assert (
+        args.input_file is None or args.label is not None
+    ), "must specify label when specifying input file"
+
     print("loading model from checkpoint...")
     model = CascadeWaveGradVQVAE.load(args.checkpoint_path)
-    assert args.label < model.num_labels
+    assert args.label is None or args.label < model.num_labels
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    print(f"loading waveform from {args.input_file}...")
-    reader = ChunkReader(args.input_file, sample_rate=args.sample_rate)
-    try:
-        chunk = reader.read(args.seconds * args.sample_rate)
-    finally:
-        reader.close()
-    in_seq = torch.from_numpy(chunk[None, None]).to(device)
+    if args.input_file is not None:
+        print(f"loading waveform from {args.input_file}...")
+        reader = ChunkReader(args.input_file, sample_rate=args.sample_rate)
+        try:
+            chunk = reader.read(args.seconds * args.sample_rate)
+        finally:
+            reader.close()
+        in_seq = torch.from_numpy(chunk[None, None]).to(device)
 
-    print("encoding audio sequence...")
-    encoded = model.encode(in_seq)
+        print("encoding audio sequence...")
+        encoded = model.encode(in_seq)
 
-    print("decoding audio samples...")
-    labels = torch.tensor([args.label]).long().to(device)
-    sample = model.decode(encoded, labels, steps=args.sample_steps, progress=True)
+        print("decoding audio samples...")
+        labels = torch.tensor([args.label]).long().to(device)
+        sample = model.decode(encoded, labels, steps=args.sample_steps, progress=True)
+    else:
+        if args.label:
+            labels = torch.tensor([args.label]).long().to(device)
+            key = "label"
+        else:
+            labels = None
+            key = "base"
+        x_T = torch.randn(1, 1, args.seconds * args.sample_rate)
+        sample = model.diffusion.ddpm_sample(
+            x_T,
+            lambda xs, ts, **kwargs: model.predictions(xs, ts, labels=labels, **kwargs)[
+                key
+            ],
+            steps=args.sample_steps,
+            progress=True,
+        )
     sample = sample.clamp(-1, 1).cpu().numpy().flatten()
 
     print(f"saving result to {args.output_file}...")
@@ -51,9 +72,9 @@ def arg_parser():
     parser.add_argument("--sample-rate", type=int, default=16000)
     parser.add_argument("--sample-steps", type=int, default=100)
     parser.add_argument("--seconds", type=int, default=4)
-    parser.add_argument("--label", type=int, default=0)
+    parser.add_argument("--label", type=int, default=None)
+    parser.add_argument("--input-file", type=str, default=None)
     parser.add_argument("checkpoint_path", type=str)
-    parser.add_argument("input_file", type=str)
     parser.add_argument("output_file", type=str)
     return parser
 

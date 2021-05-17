@@ -87,6 +87,7 @@ class VQVAE(nn.Module):
         labels: torch.Tensor,
         steps: int = 100,
         progress: bool = False,
+        key: str = "cond",
     ) -> torch.Tensor:
         """
         Sample the decoder using encoded audio and corresponding labels.
@@ -95,6 +96,7 @@ class VQVAE(nn.Module):
         :param labels: an [N] Tensor of integer labels.
         :param steps: number of diffusion steps.
         :param progress: if True, show a progress bar with tqdm.
+        :param key: the key from predictions() to use as a predictor.
         :return: an [N x 1 x T] Tensor of audio.
         """
         cond_seq = self.vq.embed(codes)
@@ -103,9 +105,9 @@ class VQVAE(nn.Module):
         ).to(codes.device)
         return self.diffusion.ddpm_sample(
             x_T,
-            lambda xs, ts, **kwargs: self.sample_predictor(
+            lambda xs, ts, **kwargs: self.predictions(
                 xs, ts, cond=cond_seq, labels=labels, **kwargs
-            ),
+            )["cond"],
             steps=steps,
             progress=progress,
         )
@@ -118,14 +120,6 @@ class VQVAE(nn.Module):
         Get epsilon predictions from one or more predictors.
 
         Each predictor has a name in the resulting dict.
-        """
-
-    @abstractmethod
-    def sample_predictor(
-        self, xs: torch.Tensor, ts: torch.Tensor, **kwargs
-    ) -> torch.Tensor:
-        """
-        Get epsilon predictions from the best predictor of self.predictions().
         """
 
     @abstractmethod
@@ -154,14 +148,6 @@ class WaveGradVQVAE(VQVAE):
         self, xs: torch.Tensor, ts: torch.Tensor, **kwargs
     ) -> Dict[str, torch.Tensor]:
         return dict(cond=self.cond_predictor(xs, ts, **kwargs))
-
-    def sample_predictor(
-        self, xs: torch.Tensor, ts: torch.Tensor, **kwargs
-    ) -> torch.Tensor:
-        """
-        Get epsilon predictions from the best predictor of self.predictions().
-        """
-        return self.predictions(xs, ts, **kwargs)["cond"]
 
     def save(self, path):
         """
