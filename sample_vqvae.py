@@ -46,7 +46,7 @@ def main():
         else:
             labels = None
             key = "base"
-        x_T = torch.randn(1, 1, args.seconds * args.sample_rate)
+        x_T = torch.randn(1, 1, args.seconds * args.sample_rate).to(device)
         sample = model.diffusion.ddpm_sample(
             x_T,
             lambda xs, ts, **kwargs: model.predictions(xs, ts, labels=labels, **kwargs)[
