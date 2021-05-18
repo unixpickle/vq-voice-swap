@@ -329,7 +329,7 @@ class FILM(nn.Module):
 
 
 class TimeEmbedding(nn.Module):
-    def __init__(self, channels):
+    def __init__(self, channels: int):
         super().__init__()
         assert not channels % 2, f"channels {channels} should be divisible by two"
         self.channels = channels

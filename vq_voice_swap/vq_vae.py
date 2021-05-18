@@ -1,4 +1,5 @@
 from abc import abstractmethod
+import math
 import os
 from typing import Any, Dict, Optional
 
@@ -6,7 +7,7 @@ import torch
 import torch.nn as nn
 
 from .diffusion import Diffusion
-from .model import WaveGradEncoder, WaveGradPredictor
+from .model import TimeEmbedding, WaveGradEncoder, WaveGradPredictor
 from .schedule import ExpSchedule
 from .vq import VQ, VQLoss
 
@@ -185,8 +186,8 @@ class CascadeWaveGradVQVAE(WaveGradVQVAE):
             num_labels=num_labels,
             base_channels=base_channels,
         )
-        self.lg_cond_scale = nn.Parameter(torch.ones(()))
-        self.lg_label_scale = nn.Parameter(torch.ones(()))
+        self.scale_cond = TimeScale()
+        self.scale_label = TimeScale()
         self.base_predictor = WaveGradPredictor(base_channels=base_channels)
         self.label_predictor = WaveGradPredictor(
             base_channels=base_channels,
@@ -202,14 +203,34 @@ class CascadeWaveGradVQVAE(WaveGradVQVAE):
         **kwargs
     ) -> Dict[str, torch.Tensor]:
         base = self.base_predictor(xs, ts, **kwargs)
-        label = (
-            base.detach()
-            + self.label_predictor(xs, ts, labels=labels, **kwargs)
-            * self.lg_label_scale.exp()
+        label = base.detach() + self.scale_label(
+            self.label_predictor(xs, ts, labels=labels, **kwargs),
+            ts,
         )
-        cond = (
-            label.detach()
-            + self.cond_predictor(xs, ts, cond=cond, labels=labels, **kwargs)
-            * self.lg_cond_scale.exp()
+        cond = label.detach() + self.scale_cond(
+            self.cond_predictor(xs, ts, cond=cond, labels=labels, **kwargs),
+            ts,
         )
         return dict(base=base, label=label, cond=cond)
+
+
+class TimeScale(nn.Module):
+    def __init__(self, channels: int = 256, initial: float = 0.05, scale: float = 3.0):
+        super().__init__()
+        self.channels = channels
+        self.initial = initial
+        self.scale = scale
+        self.time_emb = TimeEmbedding(channels)
+        self.out = nn.Sequential(
+            nn.GELU(),
+            nn.Linear(channels, 1),
+        )
+        with torch.no_grad():
+            self.out[1].weight.mul_(0)
+            self.out[1].bias.fill_(math.log(initial) / scale)
+
+    def forward(self, x: torch.Tensor, t: torch.Tensor):
+        scales = self.out(self.time_emb(t) * self.scale).exp()
+        while len(scales.shape) < len(x.shape):
+            scales = scales[..., None]
+        return x * scales
