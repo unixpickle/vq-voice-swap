@@ -288,7 +288,7 @@ class FILM(nn.Module):
         self.out_channels = out_channels
         self.hidden_channels = out_channels * 2
         self.num_labels = num_labels
-        self.time_emb = nn.Linear(self.hidden_channels, self.hidden_channels)
+        self.time_emb = TimeEmbedding(self.hidden_channels)
         self.cond_emb = nn.Sequential(
             NCTLayerNorm(cond_channels),
             nn.Conv1d(cond_channels, self.hidden_channels, 3, padding=1),
@@ -316,20 +316,7 @@ class FILM(nn.Module):
         t: torch.Tensor,
         labels: Optional[torch.Tensor] = None,
     ):
-        half = self.hidden_channels // 2
-        min_coeff = 0.1
-        max_coeff = 100.0
-        freqs = (
-            torch.exp(
-                -math.log(max_coeff / min_coeff)
-                * torch.arange(start=0, end=half, dtype=torch.float32)
-                / (half - 1)
-            ).to(cond)
-            * max_coeff
-        )
-        args = t[:, None].to(cond.dtype) * freqs[None]
-        embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
-        embedding = self.time_emb(embedding)
+        embedding = self.time_emb(t)
         assert (labels is None) == (self.label_emb is None)
         if labels is not None:
             embedding = embedding + self.label_emb(labels)
@@ -339,6 +326,30 @@ class FILM(nn.Module):
         alpha_beta = self.out_layer(embedding)
         alpha, beta = torch.split(alpha_beta, self.out_channels, dim=1)
         return inputs * (1 + alpha) + beta
+
+
+class TimeEmbedding(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        assert not channels % 2, f"channels {channels} should be divisible by two"
+        self.channels = channels
+        self.proj = nn.Linear(channels, self.channels)
+
+    def forward(self, t: torch.Tensor):
+        half = self.channels // 2
+        min_coeff = 0.1
+        max_coeff = 100.0
+        freqs = (
+            torch.exp(
+                -math.log(max_coeff / min_coeff)
+                * torch.arange(start=0, end=half, dtype=torch.float32)
+                / (half - 1)
+            )
+            * max_coeff
+        ).to(t)
+        args = t[:, None] * freqs[None]
+        embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
+        return self.proj(embedding)
 
 
 class NCTLayerNorm(nn.Module):
