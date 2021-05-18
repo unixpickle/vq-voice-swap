@@ -46,7 +46,7 @@ def main():
         },
     )
 
-    opt = AdamW(model.parameters(), lr=args.lr)
+    opt = AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     trackers = {key: LossTracker(prefix=f"{key}_") for key in ["base", "label", "cond"]}
     logger = Logger(args.log_file, resume=resume)
 
@@ -91,6 +91,7 @@ def arg_parser():
     )
     parser.add_argument("--base-channels", default=32, type=int)
     parser.add_argument("--lr", default=1e-4, type=float)
+    parser.add_argument("--weight-decay", default=0.0, type=float)
     parser.add_argument("--batch-size", default=8, type=int)
     parser.add_argument("--ema-rate", default=0.9999, type=float)
     parser.add_argument("--vq-ema-rate", default=0.99, type=float)
