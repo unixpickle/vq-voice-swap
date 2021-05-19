@@ -155,6 +155,7 @@ class ResBlock(nn.Module):
         emb_channels: int,
         out_channels: Optional[int] = None,
         scale_factor: float = 1.0,
+        dilation: int = 2,
     ):
         super().__init__()
         self.channels = channels
@@ -183,7 +184,15 @@ class ResBlock(nn.Module):
         )
         self.post_cond = nn.Sequential(
             activation(),
-            scale_module(nn.Conv1d(self.out_channels, self.out_channels, 3, padding=1)),
+            scale_module(
+                nn.Conv1d(
+                    self.out_channels,
+                    self.out_channels,
+                    3,
+                    padding=dilation,
+                    dilation=dilation,
+                )
+            ),
         )
 
     def forward(self, x: torch.Tensor, cond: torch.Tensor) -> torch.Tensor:
