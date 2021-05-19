@@ -333,7 +333,7 @@ class TimeEmbedding(nn.Module):
         super().__init__()
         assert not channels % 2, f"channels {channels} should be divisible by two"
         self.channels = channels
-        self.proj = nn.Linear(channels, self.channels)
+        self.proj = nn.Linear(channels, channels)
 
     def forward(self, t: torch.Tensor):
         half = self.channels // 2
