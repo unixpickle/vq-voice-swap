@@ -7,14 +7,15 @@ from typing import Optional, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 
 from .model import Predictor, TimeEmbedding
 
 
-class UNet(Predictor):
+class UNetPredictor(Predictor):
     def __init__(
         self,
-        channels: int,
+        base_channels: int,
         channel_mult: Tuple[int] = (1, 1, 2, 2, 2, 4, 4, 8),
         depth_mult: int = 2,
         cond_channels: Optional[int] = None,
@@ -23,7 +24,7 @@ class UNet(Predictor):
         out_channels: int = 1,
     ):
         super().__init__()
-        self.channels = channels
+        self.base_channels = base_channels
         self.channel_mult = channel_mult
         self.depth_mult = depth_mult
         self.cond_channels = cond_channels
@@ -31,17 +32,17 @@ class UNet(Predictor):
         self.in_channels = in_channels
         self.out_channels = out_channels
 
-        embed_dim = channels * 4
+        embed_dim = base_channels * 4
         self.time_embed = TimeEmbedding(embed_dim)
         if num_classes is not None:
             self.class_embed = nn.Embedding(num_classes, embed_dim)
         if cond_channels is not None:
-            self.cond_proj = nn.Conv1d(cond_channels, channels)
+            self.cond_proj = nn.Conv1d(cond_channels, base_channels)
 
-        self.in_conv = nn.Conv1d(in_channels, channels, 1)
+        self.in_conv = nn.Conv1d(in_channels, base_channels, 1)
 
-        skip_channels = [channels]
-        cur_channels = channels
+        skip_channels = [base_channels]
+        cur_channels = base_channels
 
         self.down_blocks = nn.ModuleList([])
         for depth, mult in enumerate(channel_mult):
@@ -50,20 +51,20 @@ class UNet(Predictor):
                     ResBlock(
                         channels=cur_channels,
                         emb_channels=embed_dim,
-                        out_channels=mult * channels,
+                        out_channels=mult * base_channels,
                     )
                 )
-                ch = mult * channels
-                skip_channels.append(ch)
+                cur_channels = mult * base_channels
+                skip_channels.append(cur_channels)
             if depth != len(channel_mult) - 1:
                 self.down_blocks.append(
                     ResBlock(
                         channels=cur_channels,
-                        emb_channels=cur_channels,
+                        emb_channels=embed_dim,
                         scale_factor=0.5,
                     ),
                 )
-                skip_channels.append(ch)
+                skip_channels.append(cur_channels)
 
         self.middle_blocks = nn.ModuleList(
             [
@@ -76,17 +77,17 @@ class UNet(Predictor):
         )
 
         self.up_blocks = nn.ModuleList([])
-        for depth, mult in enumerate(channel_mult)[::-1]:
+        for depth, mult in list(enumerate(channel_mult))[::-1]:
             for _ in range(depth_mult + 1):
                 in_ch = skip_channels.pop()
                 self.up_blocks.append(
                     ResBlock(
                         channels=cur_channels + in_ch,
                         emb_channels=embed_dim,
-                        out_channels=mult * channels,
+                        out_channels=mult * base_channels,
                     )
                 )
-                cur_channels = mult * channels
+                cur_channels = mult * base_channels
             if depth:
                 self.up_blocks.append(
                     ResBlock(
@@ -95,8 +96,8 @@ class UNet(Predictor):
                 )
 
         self.out = nn.Sequential(
-            norm_act(channels),
-            nn.Conv1d(channels, out_channels, 3, padding=1),
+            norm_act(base_channels),
+            nn.Conv1d(base_channels, out_channels, 3, padding=1),
         )
 
     def forward(
@@ -105,6 +106,7 @@ class UNet(Predictor):
         ts: torch.Tensor,
         cond: Optional[torch.Tensor] = None,
         labels: Optional[torch.Tensor] = None,
+        use_checkpoint: bool = False,
     ) -> torch.Tensor:
         assert (labels is None) == (
             self.num_classes is None
@@ -121,15 +123,26 @@ class UNet(Predictor):
         if cond is not None:
             h = h + F.interpolate(self.cond_proj(cond), h.shape[-1])
 
-        skips = []
+        skips = [h]
         for block in self.down_blocks:
-            h = block(h, emb)
+            if use_checkpoint:
+                h = checkpoint(block, h, emb)
+            else:
+                h = block(h, emb)
             skips.append(h)
-        for i, block in self.up_blocks:
+        for block in self.middle_blocks:
+            if use_checkpoint:
+                h = checkpoint(block, h, emb)
+            else:
+                h = block(h, emb)
+        for i, block in enumerate(self.up_blocks):
             # No skip connection for upsampling block.
             if i % (self.depth_mult + 2) != self.depth_mult + 1:
-                h = torch.cat(h, skips.pop(), axis=1)
-            h = block(h)
+                h = torch.cat([h, skips.pop()], axis=1)
+            if use_checkpoint:
+                h = checkpoint(block, h, emb)
+            else:
+                h = block(h, emb)
 
         h = self.out(h)
         return h
@@ -166,7 +179,7 @@ class ResBlock(nn.Module):
             norm_act(channels),
             Resize(scale_factor),
             nn.Conv1d(self.channels, self.out_channels, 3, padding=1),
-            normalization(channels),
+            normalization(self.out_channels),
         )
         self.post_cond = nn.Sequential(
             activation(),
@@ -184,9 +197,10 @@ class ResBlock(nn.Module):
 
 class Resize(nn.Module):
     def __init__(self, scale_factor: float):
+        super().__init__()
         self.scale_factor = scale_factor
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.scale_factor == 1.0:
             return x
         if self.scale_factor < 1.0:
@@ -208,7 +222,7 @@ def activation() -> nn.Module:
 
 
 def normalization(ch: int) -> nn.Module:
-    return nn.GroupNorm(num_groups=32, num_channels=ch)
+    return nn.GroupNorm(num_groups=min(32, ch), num_channels=ch)
 
 
 def scale_module(module: nn.Module, s: float = 0.0) -> nn.Module:
