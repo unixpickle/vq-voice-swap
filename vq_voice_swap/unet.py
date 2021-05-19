@@ -34,6 +34,9 @@ class UNetPredictor(Predictor):
 
         embed_dim = base_channels * 4
         self.time_embed = TimeEmbedding(embed_dim)
+        self.time_embed_extra = nn.Sequential(
+            nn.GELU(), nn.Linear(embed_dim, embed_dim)
+        )
         if num_classes is not None:
             self.class_embed = nn.Embedding(num_classes, embed_dim)
         if cond_channels is not None:
@@ -115,7 +118,7 @@ class UNetPredictor(Predictor):
             self.cond_channels is None
         ), "must provide cond sequence if and only if model is conditional"
 
-        emb = self.time_embed(ts)
+        emb = self.time_embed_extra(self.time_embed(ts))
         if labels is not None:
             emb = emb + self.class_embed(labels)
 
