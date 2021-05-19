@@ -8,15 +8,15 @@ import torch
 
 from vq_voice_swap.dataset import ChunkWriter
 from vq_voice_swap.diffusion import Diffusion
-from vq_voice_swap.model import WaveGradPredictor
 from vq_voice_swap.schedule import ExpSchedule
+from vq_voice_swap.vq_vae import make_predictor
 
 
 def main():
     args = arg_parser().parse_args()
 
     diffusion = Diffusion(ExpSchedule())
-    model = WaveGradPredictor()
+    model = make_predictor(args.predictor, base_channels=args.base_channels)
 
     model.load_state_dict(torch.load(args.checkpoint_path, map_location="cpu"))
 
@@ -35,6 +35,8 @@ def arg_parser():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
+    parser.add_argument("--predictor", default="wavegrad", type=str)
+    parser.add_argument("--base-channels", default=32, type=int)
     parser.add_argument("--sample-steps", default=100, type=int)
     parser.add_argument("--checkpoint-path", default="model_diffusion.pt", type=str)
     parser.add_argument("--sample-path", default="sample.wav", type=str)

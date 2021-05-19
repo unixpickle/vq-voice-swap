@@ -5,6 +5,7 @@ Train an unconditional diffusion model on waveforms.
 import argparse
 import os
 
+import numpy as np
 import torch
 from torch.optim import AdamW
 
@@ -13,15 +14,15 @@ from vq_voice_swap.diffusion import Diffusion
 from vq_voice_swap.ema import ModelEMA
 from vq_voice_swap.logger import Logger
 from vq_voice_swap.loss_tracker import LossTracker
-from vq_voice_swap.model import WaveGradPredictor
 from vq_voice_swap.schedule import ExpSchedule
+from vq_voice_swap.vq_vae import make_predictor
 
 
 def main():
     args = arg_parser().parse_args()
 
     diffusion = Diffusion(ExpSchedule())
-    model = WaveGradPredictor(base_channels=args.base_channels)
+    model = make_predictor(args.predictor, base_channels=args.base_channels)
 
     if os.path.exists(args.checkpoint_path):
         print("loading from checkpoint...")
@@ -29,6 +30,8 @@ def main():
         resume = True
     else:
         resume = False
+
+    print(f"total parameters: {count_params(model)}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -75,6 +78,10 @@ def main():
             os.rename(tmp_file, args.ema_path)
 
 
+def count_params(model):
+    return sum(np.prod(x.shape) for x in model.parameters())
+
+
 def repeat_dataset(data_loader):
     while True:
         yield from data_loader
@@ -84,6 +91,7 @@ def arg_parser():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
+    parser.add_argument("--predictor", default="wavegrad", type=str)
     parser.add_argument("--base-channels", default=32, type=int)
     parser.add_argument("--lr", default=1e-4, type=float)
     parser.add_argument("--ema-rate", default=0.9999, type=float)

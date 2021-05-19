@@ -7,7 +7,7 @@ import argparse
 import torch
 
 from vq_voice_swap.dataset import ChunkReader, ChunkWriter
-from vq_voice_swap.vq_vae import CascadeWaveGradVQVAE
+from vq_voice_swap.vq_vae import CascadeVQVAE
 
 
 def main():
@@ -18,7 +18,7 @@ def main():
     ), "must specify label when specifying input file"
 
     print("loading model from checkpoint...")
-    model = CascadeWaveGradVQVAE.load(args.checkpoint_path)
+    model = CascadeVQVAE.load(args.checkpoint_path)
     assert args.label is None or args.label < model.num_labels
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

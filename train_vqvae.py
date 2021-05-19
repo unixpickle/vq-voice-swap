@@ -13,7 +13,7 @@ from vq_voice_swap.dataset import create_data_loader
 from vq_voice_swap.ema import ModelEMA
 from vq_voice_swap.logger import Logger
 from vq_voice_swap.loss_tracker import LossTracker
-from vq_voice_swap.vq_vae import CascadeWaveGradVQVAE
+from vq_voice_swap.vq_vae import CascadeVQVAE
 
 
 def main():
@@ -26,12 +26,14 @@ def main():
     if os.path.exists(args.checkpoint_path):
         print("loading from checkpoint...")
         resume = True
-        model = CascadeWaveGradVQVAE.load(args.checkpoint_path)
+        model = CascadeVQVAE.load(args.checkpoint_path)
         assert model.num_labels == num_labels
     else:
         print("creating new model...")
         resume = False
-        model = CascadeWaveGradVQVAE(num_labels, base_channels=args.base_channels)
+        model = CascadeVQVAE(
+            args.predictor, num_labels, base_channels=args.base_channels
+        )
 
     print(f"total parameters: {count_params(model)}")
 
@@ -89,6 +91,7 @@ def arg_parser():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
+    parser.add_argument("--predictor", default="wavegrad", type=str)
     parser.add_argument("--base-channels", default=32, type=int)
     parser.add_argument("--lr", default=1e-4, type=float)
     parser.add_argument("--weight-decay", default=0.0, type=float)

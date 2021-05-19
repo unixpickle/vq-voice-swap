@@ -2,12 +2,13 @@ from abc import abstractmethod
 import math
 import os
 from typing import Any, Dict, Optional
+from vq_voice_swap.unet import UNetPredictor
 
 import torch
 import torch.nn as nn
 
 from .diffusion import Diffusion
-from .model import TimeEmbedding, WaveGradEncoder, WaveGradPredictor
+from .model import Predictor, TimeEmbedding, WaveGradEncoder, WaveGradPredictor
 from .schedule import ExpSchedule
 from .vq import VQ, VQLoss
 
@@ -130,8 +131,8 @@ class VQVAE(nn.Module):
         """
 
 
-class WaveGradVQVAE(VQVAE):
-    def __init__(self, num_labels: int, base_channels: int = 32):
+class ConcreteVQVAE(VQVAE):
+    def __init__(self, pred_name: str, num_labels: int, base_channels: int = 32):
         encoder = WaveGradEncoder(base_channels=base_channels)
         super().__init__(
             encoder=encoder,
@@ -140,9 +141,13 @@ class WaveGradVQVAE(VQVAE):
             diffusion=Diffusion(ExpSchedule()),
             num_labels=num_labels,
         )
+        self.pred_name = pred_name
         self.base_channels = base_channels
-        self.cond_predictor = WaveGradPredictor(
-            base_channels=base_channels, num_labels=num_labels
+        self.cond_predictor = make_predictor(
+            pred_name,
+            base_channels=base_channels,
+            cond_channels=encoder.cond_channels,
+            num_labels=num_labels,
         )
 
     def predictions(
@@ -157,6 +162,7 @@ class WaveGradVQVAE(VQVAE):
         """
         state = {
             "kwargs": {
+                "pred_name": self.pred_name,
                 "num_labels": self.num_labels,
                 "base_channels": self.base_channels,
             },
@@ -177,19 +183,21 @@ class WaveGradVQVAE(VQVAE):
         return obj
 
     def downsample_rate(self):
-        return 64
+        return predictor_downsample_rate(self.pred_name)
 
 
-class CascadeWaveGradVQVAE(WaveGradVQVAE):
-    def __init__(self, num_labels: int, base_channels: int = 32):
+class CascadeVQVAE(ConcreteVQVAE):
+    def __init__(self, pred_name: str, num_labels: int, base_channels: int = 32):
         super().__init__(
+            pred_name=pred_name,
             num_labels=num_labels,
             base_channels=base_channels,
         )
         self.scale_cond = TimeScale()
         self.scale_label = TimeScale()
-        self.base_predictor = WaveGradPredictor(base_channels=base_channels)
-        self.label_predictor = WaveGradPredictor(
+        self.base_predictor = make_predictor(pred_name, base_channels=base_channels)
+        self.label_predictor = make_predictor(
+            pred_name,
             base_channels=base_channels,
             num_labels=num_labels,
         )
@@ -200,7 +208,7 @@ class CascadeWaveGradVQVAE(WaveGradVQVAE):
         ts: torch.Tensor,
         cond: Optional[torch.Tensor] = None,
         labels: Optional[torch.Tensor] = None,
-        **kwargs
+        **kwargs,
     ) -> Dict[str, torch.Tensor]:
         base = self.base_predictor(xs, ts, **kwargs)
         label = base.detach() + self.scale_label(
@@ -234,3 +242,33 @@ class TimeScale(nn.Module):
         while len(scales.shape) < len(x.shape):
             scales = scales[..., None]
         return x * scales
+
+
+def make_predictor(
+    pred_name: str,
+    base_channels: int = 32,
+    cond_channels: Optional[int] = None,
+    **kwargs,
+) -> Predictor:
+    if pred_name == "wavegrad":
+        cond_mult = cond_channels // base_channels if cond_channels else 16
+        return WaveGradPredictor(
+            base_channels=base_channels, cond_mult=cond_mult, **kwargs
+        )
+    elif pred_name == "unet":
+        return UNetPredictor(
+            base_channels=base_channels,
+            cond_channels=cond_channels,
+            **kwargs,
+        )
+    else:
+        raise ValueError(f"unknown predictor: {pred_name}")
+
+
+def predictor_downsample_rate(pred_name: str) -> int:
+    if pred_name == "wavegrad":
+        return 2 ** 6
+    elif pred_name == "unet":
+        return 2 ** 8
+    else:
+        raise ValueError(f"unknown predictor: {pred_name}")

@@ -19,7 +19,7 @@ class UNetPredictor(Predictor):
         channel_mult: Tuple[int] = (1, 1, 2, 2, 2, 4, 4, 8),
         depth_mult: int = 2,
         cond_channels: Optional[int] = None,
-        num_classes: Optional[int] = None,
+        num_labels: Optional[int] = None,
         in_channels: int = 1,
         out_channels: int = 1,
     ):
@@ -28,7 +28,7 @@ class UNetPredictor(Predictor):
         self.channel_mult = channel_mult
         self.depth_mult = depth_mult
         self.cond_channels = cond_channels
-        self.num_classes = num_classes
+        self.num_labels = num_labels
         self.in_channels = in_channels
         self.out_channels = out_channels
 
@@ -37,10 +37,10 @@ class UNetPredictor(Predictor):
         self.time_embed_extra = nn.Sequential(
             nn.GELU(), nn.Linear(embed_dim, embed_dim)
         )
-        if num_classes is not None:
-            self.class_embed = nn.Embedding(num_classes, embed_dim)
+        if num_labels is not None:
+            self.class_embed = nn.Embedding(num_labels, embed_dim)
         if cond_channels is not None:
-            self.cond_proj = nn.Conv1d(cond_channels, base_channels)
+            self.cond_proj = nn.Conv1d(cond_channels, base_channels, 1)
 
         self.in_conv = nn.Conv1d(in_channels, base_channels, 1)
 
@@ -112,7 +112,7 @@ class UNetPredictor(Predictor):
         use_checkpoint: bool = False,
     ) -> torch.Tensor:
         assert (labels is None) == (
-            self.num_classes is None
+            self.num_labels is None
         ), "must provide labels if and only if model is class conditional"
         assert (cond is None) == (
             self.cond_channels is None
@@ -234,7 +234,10 @@ def activation() -> nn.Module:
 
 
 def normalization(ch: int) -> nn.Module:
-    return nn.GroupNorm(num_groups=min(32, ch), num_channels=ch)
+    num_groups = 32
+    while ch % num_groups:
+        num_groups //= 2
+    return nn.GroupNorm(num_groups=num_groups, num_channels=ch)
 
 
 def scale_module(module: nn.Module, s: float = 0.0) -> nn.Module:
