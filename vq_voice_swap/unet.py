@@ -42,9 +42,9 @@ class UNetPredictor(Predictor):
         if num_labels is not None:
             self.class_embed = nn.Embedding(num_labels, embed_dim)
         if cond_channels is not None:
-            self.cond_proj = nn.Conv1d(cond_channels, base_channels, 1)
+            self.cond_proj = nn.Conv1d(cond_channels, base_channels, 3, padding=1)
 
-        self.in_conv = nn.Conv1d(in_channels, base_channels, 1)
+        self.in_conv = nn.Conv1d(in_channels, base_channels, 3, padding=1)
 
         skip_channels = [base_channels]
         cur_channels = base_channels
