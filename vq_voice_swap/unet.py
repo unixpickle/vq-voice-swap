@@ -16,7 +16,8 @@ class UNetPredictor(Predictor):
     def __init__(
         self,
         base_channels: int,
-        channel_mult: Tuple[int] = (1, 1, 2, 2, 2, 4, 4, 8),
+        channel_mult: Tuple[int] = (1, 1, 2, 2, 2, 4, 4, 8, 8),
+        middle_dilations: Tuple[int] = (4, 8, 16, 32),
         depth_mult: int = 2,
         cond_channels: Optional[int] = None,
         num_labels: Optional[int] = None,
@@ -26,6 +27,7 @@ class UNetPredictor(Predictor):
         super().__init__()
         self.base_channels = base_channels
         self.channel_mult = channel_mult
+        self.middle_dilations = middle_dilations
         self.depth_mult = depth_mult
         self.cond_channels = cond_channels
         self.num_labels = num_labels
@@ -74,8 +76,9 @@ class UNetPredictor(Predictor):
                 ResBlock(
                     channels=cur_channels,
                     emb_channels=embed_dim,
+                    dilation=d,
                 )
-                for _ in range(2)
+                for d in middle_dilations
             ]
         )
 
