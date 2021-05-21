@@ -13,7 +13,8 @@ def create_data_loader(
     directory: str, batch_size: int, num_workers=4, **dataset_kwargs
 ) -> Tuple[DataLoader, int]:
     """
-    Create a LibriSpeech data loader.
+    Create an audio data loader, either from LibriSpeech or from a small
+    synthetic set of tones.
 
     Returned batches are dicts containing at least two keys:
         - 'label' (int): the speaker ID.
@@ -81,9 +82,14 @@ class LibriSpeech(Dataset):
                 space_samples = int(self.sample_rate * self.window_spacing)
                 total_samples = int(self.sample_rate * (item - DURATION_ESTIMATE_SLACK))
                 idx = 0
-                while idx + window_samples < total_samples:
-                    self.data.append(LibriSpeechDatum(label, sub_path, 0))
-                    idx += space_samples
+                if window_samples >= total_samples:
+                    # This is a short clip, so we mark that it should be
+                    # zero padded.
+                    self.data.append(LibriSpeechDatum(label, sub_path, 0, True))
+                else:
+                    while idx + window_samples < total_samples:
+                        self.data.append(LibriSpeechDatum(label, sub_path, idx, False))
+                        idx += space_samples
             else:
                 self._create_speaker_data(label, sub_path, item)
 
@@ -97,7 +103,10 @@ class LibriSpeech(Dataset):
             reader.read(datum.offset)
             num_samples = int(self.sample_rate * self.window_duration)
             samples = reader.read(num_samples)
-            assert len(samples) == num_samples, "file was shorter than expected"
+            if datum.padded:
+                samples = np.pad(samples, (0, num_samples - len(samples)))
+            elif len(samples) != num_samples:
+                raise RuntimeError("file was shorter than expected")
             return {"label": datum.label, "samples": samples}
         finally:
             reader.close()
@@ -108,10 +117,11 @@ class LibriSpeechDataError(Exception):
 
 
 class LibriSpeechDatum:
-    def __init__(self, label: int, path: str, offset: int):
+    def __init__(self, label: int, path: str, offset: int, padded: bool):
         self.label = label
         self.path = path
         self.offset = offset
+        self.padded = padded
 
 
 class ToneDataset(Dataset):
