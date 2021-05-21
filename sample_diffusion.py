@@ -18,7 +18,7 @@ def main():
     diffusion = Diffusion(ExpSchedule())
     model = make_predictor(args.predictor, base_channels=args.base_channels)
 
-    # model.load_state_dict(torch.load(args.checkpoint_path, map_location="cpu"))
+    model.load_state_dict(torch.load(args.checkpoint_path, map_location="cpu"))
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
