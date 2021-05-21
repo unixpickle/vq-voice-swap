@@ -1,3 +1,5 @@
+import os
+
 import torch
 import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
@@ -16,7 +18,7 @@ class Classifier(nn.Module):
         self.num_labels = num_labels
         self.stem = ClassifierStem(**kwargs)
         self.out = nn.Sequential(
-            activation(), nn.Linear(self.stem.out_channels, num_labels)
+            activation(), scale_module(nn.Linear(self.stem.out_channels, num_labels))
         )
 
     def forward(
@@ -25,6 +27,33 @@ class Classifier(nn.Module):
         h = self.stem(x, ts, use_checkpoint=use_checkpoint, **kwargs)
         h = self.out(h)
         return h
+
+    def save(self, path):
+        """
+        Save this model and its hyperparameters to a file.
+        """
+        state = {
+            "kwargs": {
+                "num_labels": self.num_labels,
+                "base_channels": self.base_channels,
+                "channel_mult": self.channel_mult,
+                "depth_mult": self.depth_mult,
+            },
+            "state_dict": self.state_dict(),
+        }
+        tmp_path = path + ".tmp"
+        torch.save(state, tmp_path)
+        os.rename(tmp_path, path)
+
+    @classmethod
+    def load(cls, path):
+        """
+        Load a fresh model instance from a file.
+        """
+        state = torch.load(path, map_location="cpu")
+        obj = cls(**state["kwargs"])
+        obj.load_state_dict(state["state_dict"])
+        return obj
 
 
 class ClassifierStem(nn.Module):
