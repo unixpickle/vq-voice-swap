@@ -37,7 +37,7 @@ class UNetPredictor(Predictor):
         embed_dim = base_channels * 4
         self.time_embed = TimeEmbedding(embed_dim)
         self.time_embed_extra = nn.Sequential(
-            nn.GELU(), nn.Linear(embed_dim, embed_dim)
+            activation(), nn.Linear(embed_dim, embed_dim)
         )
         if num_labels is not None:
             self.class_embed = nn.Embedding(num_labels, embed_dim)
