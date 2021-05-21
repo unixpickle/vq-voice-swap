@@ -36,9 +36,9 @@ class Classifier(nn.Module):
         state = {
             "kwargs": {
                 "num_labels": self.num_labels,
-                "base_channels": self.base_channels,
-                "channel_mult": self.channel_mult,
-                "depth_mult": self.depth_mult,
+                "base_channels": self.stem.base_channels,
+                "channel_mult": self.stem.channel_mult,
+                "depth_mult": self.stem.depth_mult,
             },
             "state_dict": self.state_dict(),
         }
