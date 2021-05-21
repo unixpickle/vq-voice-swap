@@ -3,7 +3,7 @@ from typing import Callable
 import torch
 from tqdm.auto import tqdm
 
-from .schedule import Schedule
+from .schedule import ExpSchedule, Schedule
 
 
 class Diffusion:
@@ -25,7 +25,7 @@ class Diffusion:
         alphas = broadcast_as(self.schedule(ts), x_0)
         return alphas.sqrt() * x_0 + (1 - alphas).sqrt() * epsilon
 
-    def predict_x0(
+    def eps_to_x0(
         self, x_t: torch.Tensor, ts: torch.Tensor, epsilon_prediction: torch.Tensor
     ):
         """
@@ -34,6 +34,14 @@ class Diffusion:
         """
         alphas = broadcast_as(self.schedule(ts), x_t)
         return (x_t - (1 - alphas).sqrt() * epsilon_prediction) * alphas.rsqrt()
+
+    def x0_to_eps(self, x_t: torch.Tensor, ts: torch.Tensor, x_0: torch.Tensor):
+        """
+        Compute the inverse of eps_to_x0() with respect to epsilon, computing
+        the epsilon which would have given an x_0 prediction.
+        """
+        alphas = broadcast_as(self.schedule(ts), x_t)
+        return (x_t - x_0 * alphas.sqrt()) * (1 - alphas).rsqrt()
 
     def ddpm_previous(
         self,
@@ -71,6 +79,7 @@ class Diffusion:
         steps: int,
         progress: bool = False,
         sigma_large: bool = False,
+        constrain: bool = False,
     ):
         """
         Sample x_0 from x_t using reverse diffusion.
@@ -86,11 +95,16 @@ class Diffusion:
         for i, t in its:
             ts = torch.tensor([t] * x_T.shape[0]).to(x_T)
             with torch.no_grad():
+                eps = predictor(x_t, ts)
+                if constrain:
+                    x0 = self.eps_to_x0(x_t, ts, eps)
+                    x0 = (x0 - x0.mean(dim=-1, keepdim=True)).clamp(-1, 1)
+                    eps = self.x0_to_eps(x_t, ts, x0)
                 x_t = self.ddpm_previous(
                     x_t=x_t,
                     ts=ts,
                     step=t_step,
-                    epsilon_prediction=predictor(x_t, ts),
+                    epsilon_prediction=eps,
                     noise=torch.zeros_like(x_T) if i + 1 == steps else None,
                     sigma_large=sigma_large,
                 )

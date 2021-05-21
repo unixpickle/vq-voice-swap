@@ -18,13 +18,15 @@ def main():
     diffusion = Diffusion(ExpSchedule())
     model = make_predictor(args.predictor, base_channels=args.base_channels)
 
-    model.load_state_dict(torch.load(args.checkpoint_path, map_location="cpu"))
+    # model.load_state_dict(torch.load(args.checkpoint_path, map_location="cpu"))
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
     x_T = torch.randn(1, 1, 64000, device=device)
-    sample = diffusion.ddpm_sample(x_T, model, args.sample_steps, progress=True)
+    sample = diffusion.ddpm_sample(
+        x_T, model, args.sample_steps, progress=True, constrain=args.constrain
+    )
 
     writer = ChunkWriter(args.sample_path, 16000)
     writer.write(sample.view(-1).cpu().numpy())
@@ -38,6 +40,7 @@ def arg_parser():
     parser.add_argument("--predictor", default="wavegrad", type=str)
     parser.add_argument("--base-channels", default=32, type=int)
     parser.add_argument("--sample-steps", default=100, type=int)
+    parser.add_argument("--constrain", action="store_true")
     parser.add_argument("--checkpoint-path", default="model_diffusion.pt", type=str)
     parser.add_argument("--sample-path", default="sample.wav", type=str)
     return parser
