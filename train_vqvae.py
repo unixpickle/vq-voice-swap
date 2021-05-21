@@ -35,6 +35,12 @@ def main():
             args.predictor, num_labels, base_channels=args.base_channels
         )
 
+    if args.pretrained_base:
+        print(f"loading and fusing pre-trained base model: {args.pretrained_base}")
+        model.base_predictor.load_state_dict(torch.load(args.pretrained_base))
+        for p in model.base_predictor.parameters():
+            p.requires_grad_(False)
+
     print(f"total parameters: {count_params(model)}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -99,6 +105,7 @@ def arg_parser():
     parser.add_argument("--ema-rate", default=0.9999, type=float)
     parser.add_argument("--vq-ema-rate", default=0.99, type=float)
     parser.add_argument("--checkpoint-path", default="model_vqvae.pt", type=str)
+    parser.add_argument("--pretrained-base", default=None, type=str)
     parser.add_argument("--ema-path", default="model_vqvae_ema.pt", type=str)
     parser.add_argument("--save-interval", default=500, type=int)
     parser.add_argument("--grad-checkpoint", action="store_true")
