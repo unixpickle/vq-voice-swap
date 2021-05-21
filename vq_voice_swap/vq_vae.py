@@ -10,6 +10,7 @@ import torch.nn as nn
 from .diffusion import Diffusion
 from .model import Predictor, TimeEmbedding, WaveGradEncoder, WaveGradPredictor
 from .schedule import ExpSchedule
+from .util import atomic_save
 from .vq import VQ, VQLoss
 
 
@@ -168,9 +169,7 @@ class ConcreteVQVAE(VQVAE):
             },
             "state_dict": self.state_dict(),
         }
-        tmp_path = path + ".tmp"
-        torch.save(state, tmp_path)
-        os.rename(tmp_path, path)
+        atomic_save(state, path)
 
     @classmethod
     def load(cls, path):

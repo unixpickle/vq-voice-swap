@@ -15,6 +15,7 @@ from vq_voice_swap.ema import ModelEMA
 from vq_voice_swap.logger import Logger
 from vq_voice_swap.loss_tracker import LossTracker
 from vq_voice_swap.schedule import ExpSchedule
+from vq_voice_swap.util import atomic_save, count_params, repeat_dataset
 from vq_voice_swap.vq_vae import make_predictor
 
 
@@ -69,22 +70,8 @@ def main():
         logger.log(step, mse=loss.item(), **tracker.log_dict())
 
         if step % args.save_interval == 0:
-            tmp_file = args.checkpoint_path + ".tmp"
-            torch.save(model.state_dict(), tmp_file)
-            os.rename(tmp_file, args.checkpoint_path)
-
-            tmp_file = args.ema_path + ".tmp"
-            torch.save(ema.model.state_dict(), tmp_file)
-            os.rename(tmp_file, args.ema_path)
-
-
-def count_params(model):
-    return sum(np.prod(x.shape) for x in model.parameters())
-
-
-def repeat_dataset(data_loader):
-    while True:
-        yield from data_loader
+            atomic_save(model.state_dict(), args.checkpoint_path)
+            atomic_save(ema.model.state_dict(), args.ema_path)
 
 
 def arg_parser():

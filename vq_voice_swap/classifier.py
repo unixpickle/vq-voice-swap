@@ -6,6 +6,7 @@ from torch.utils.checkpoint import checkpoint
 
 from .model import TimeEmbedding
 from .unet import activation, norm_act, normalization, scale_module
+from .util import atomic_save
 
 
 class Classifier(nn.Module):
@@ -41,9 +42,7 @@ class Classifier(nn.Module):
             },
             "state_dict": self.state_dict(),
         }
-        tmp_path = path + ".tmp"
-        torch.save(state, tmp_path)
-        os.rename(tmp_path, path)
+        atomic_save(state, path)
 
     @classmethod
     def load(cls, path):

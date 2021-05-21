@@ -13,6 +13,7 @@ from vq_voice_swap.dataset import create_data_loader
 from vq_voice_swap.ema import ModelEMA
 from vq_voice_swap.logger import Logger
 from vq_voice_swap.loss_tracker import LossTracker
+from vq_voice_swap.util import count_params, repeat_dataset
 from vq_voice_swap.vq_vae import CascadeVQVAE
 
 
@@ -82,15 +83,6 @@ def main():
         if step % args.save_interval == 0:
             model.save(args.checkpoint_path)
             ema.model.save(args.ema_path)
-
-
-def repeat_dataset(data_loader):
-    while True:
-        yield from data_loader
-
-
-def count_params(model):
-    return sum(np.prod(x.shape) for x in model.parameters())
 
 
 def arg_parser():
