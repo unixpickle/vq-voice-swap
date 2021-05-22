@@ -3,7 +3,7 @@ from typing import Callable
 import torch
 from tqdm.auto import tqdm
 
-from .schedule import ExpSchedule, Schedule
+from .schedule import Schedule
 
 
 class Diffusion:
@@ -51,6 +51,7 @@ class Diffusion:
         epsilon_prediction: torch.Tensor,
         noise: torch.Tensor = None,
         sigma_large: bool = False,
+        cond_fn: Callable = None,
     ):
         """
         Sample the previous timestep using reverse diffusion.
@@ -67,10 +68,13 @@ class Diffusion:
         else:
             sigmas = betas
 
-        return (
-            alphas.rsqrt() * (x_t - betas * (1 - alphas_t).rsqrt() * epsilon_prediction)
-            + sigmas.sqrt() * noise
+        mean_pred = alphas.rsqrt() * (
+            x_t - betas * (1 - alphas_t).rsqrt() * epsilon_prediction
         )
+        if cond_fn is not None:
+            mean_pred = mean_pred + sigmas * cond_fn(mean_pred, ts - step)
+
+        return mean_pred + sigmas.sqrt() * noise
 
     def ddpm_sample(
         self,
@@ -80,6 +84,7 @@ class Diffusion:
         progress: bool = False,
         sigma_large: bool = False,
         constrain: bool = False,
+        cond_fn: Callable = None,
     ):
         """
         Sample x_0 from x_t using reverse diffusion.
@@ -107,6 +112,7 @@ class Diffusion:
                     epsilon_prediction=eps,
                     noise=torch.zeros_like(x_T) if i + 1 == steps else None,
                     sigma_large=sigma_large,
+                    cond_fn=cond_fn,
                 )
 
         return x_t
