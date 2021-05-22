@@ -48,13 +48,16 @@ def main():
 
     for i, data_batch in enumerate(repeat_dataset(data_loader)):
         audio_seq = data_batch["samples"][:, None].to(device)
-        ts = torch.rand(args.batch_size, device=device)
-        noise = torch.randn_like(audio_seq)
-        samples = diffusion.sample_q(audio_seq, ts, epsilon=noise)
-        logits = model(samples, ts, use_checkpoint=args.grad_checkpoint)
-        targets = data_batch["label"].to(device)
-        nlls = -F.log_softmax(logits, dim=-1)[range(len(targets)), targets]
-        loss = nlls.mean()
+        labels = data_batch["label"].to(device)
+        ts = torch.rand(len(audio_seq), device=device)
+        nlls, loss = compute_losses(
+            model, diffusion, audio_seq, labels, ts, use_checkpoint=args.grad_checkpoint
+        )
+        with torch.no_grad():
+            _, t0_loss = compute_losses(
+                model, diffusion, audio_seq[:1], labels[:1], ts[:1] * 0
+            )
+            t0_loss = t0_loss.item()
 
         opt.zero_grad()
         loss.backward()
@@ -62,10 +65,18 @@ def main():
 
         step = i + 1
         tracker.add(ts, nlls)
-        logger.log(step, nll=loss.item(), **tracker.log_dict())
+        logger.log(step, nll=loss.item(), nll_t0=t0_loss, **tracker.log_dict())
 
         if step % args.save_interval == 0:
             model.save(args.checkpoint_path)
+
+
+def compute_losses(model, diffusion, audio_seq, labels, ts, **kwargs):
+    samples = diffusion.sample_q(audio_seq, ts)
+    logits = model(samples, ts, **kwargs)
+    nlls = -F.log_softmax(logits, dim=-1)[range(len(labels)), labels]
+    loss = nlls.mean()
+    return nlls, loss
 
 
 def arg_parser():
