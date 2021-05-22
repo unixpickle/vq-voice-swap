@@ -39,7 +39,7 @@ def main():
             xs, ys = tuple(zip(*entries))
             ys = moving_average(ys, args.smoothing)
             plt.plot(xs, ys, label=f"{name} {field}")
-    plt.ylim(0, args.max_y)
+    plt.ylim(args.min_y, args.max_y)
     if args.max_x is not None:
         plt.xlim(0, args.max_x)
     plt.xlabel("step")
@@ -61,6 +61,7 @@ def arg_parser():
     )
     parser.add_argument("--smoothing", type=int, default=1)
     parser.add_argument("--max-x", type=float, default=None)
+    parser.add_argument("--min-y", type=float, default=0.0)
     parser.add_argument("--max-y", type=float, default=1.0)
     parser.add_argument("--fields", type=str, nargs="+", default="base_q.")
     parser.add_argument("log_files", nargs="+", type=str)
