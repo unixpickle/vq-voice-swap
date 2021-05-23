@@ -83,12 +83,10 @@ class LibriSpeech(Dataset):
                 total_samples = int(self.sample_rate * (item - DURATION_ESTIMATE_SLACK))
                 idx = 0
                 if window_samples >= total_samples:
-                    # This is a short clip, so we mark that it should be
-                    # zero padded.
-                    self.data.append(LibriSpeechDatum(label, sub_path, 0, True))
+                    self.data.append(LibriSpeechDatum(label, sub_path, 0))
                 else:
                     while idx + window_samples < total_samples:
-                        self.data.append(LibriSpeechDatum(label, sub_path, idx, False))
+                        self.data.append(LibriSpeechDatum(label, sub_path, idx))
                         idx += space_samples
             else:
                 self._create_speaker_data(label, sub_path, item)
@@ -103,10 +101,7 @@ class LibriSpeech(Dataset):
             reader.read(datum.offset)
             num_samples = int(self.sample_rate * self.window_duration)
             samples = reader.read(num_samples)
-            if datum.padded:
-                samples = np.pad(samples, (0, num_samples - len(samples)))
-            elif len(samples) != num_samples:
-                raise RuntimeError("file was shorter than expected")
+            samples = np.pad(samples, (0, num_samples - len(samples)))
             return {"label": datum.label, "samples": samples}
         finally:
             reader.close()
@@ -117,11 +112,10 @@ class LibriSpeechDataError(Exception):
 
 
 class LibriSpeechDatum:
-    def __init__(self, label: int, path: str, offset: int, padded: bool):
+    def __init__(self, label: int, path: str, offset: int):
         self.label = label
         self.path = path
         self.offset = offset
-        self.padded = padded
 
 
 class ToneDataset(Dataset):

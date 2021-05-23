@@ -1,4 +1,5 @@
-import os
+import math
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -106,7 +107,9 @@ class ClassifierStem(nn.Module):
 
         self.out = nn.Sequential(
             norm_act(self.out_channels),
-            nn.Conv1d(self.out_channels, self.out_channels, kernel_size=3, padding=1),
+            AttentionPool1d(
+                self.out_channels, head_channels=min(self.out_channels, 64)
+            ),
         )
 
     def conditional_embedding(self, ts: torch.Tensor, **kwargs) -> torch.Tensor:
@@ -122,8 +125,7 @@ class ClassifierStem(nn.Module):
                 h = checkpoint(block, h, emb)
             else:
                 h = block(h, emb)
-        h = self.out(h)
-        return h.mean(dim=-1)
+        return self.out(h)
 
 
 class ClassifierResBlock(nn.Module):
@@ -177,3 +179,64 @@ class ClassifierResBlock(nn.Module):
         h = h * (cond_a + 1) + cond_b
         h = self.post_cond(h)
         return self.skip(x) + h
+
+
+class AttentionPool1d(nn.Module):
+    """
+    Adapted from: https://github.com/openai/guided-diffusion/blob/b16b0a180ffac9da8a6a03f1e78de8e96669eee8/guided_diffusion/unet.py#L22
+    """
+
+    def __init__(
+        self,
+        channels: int,
+        head_channels: int = 64,
+        out_channels: Optional[int] = None,
+    ):
+        super().__init__()
+        assert (
+            channels % head_channels == 0
+        ), f"head channels ({head_channels}) must divide output channels ({out_channels})"
+        self.qkv_proj = nn.Conv1d(channels, 3 * channels, 1)
+        self.c_proj = nn.Conv1d(channels, out_channels or channels, 1)
+        self.num_heads = channels // head_channels
+        self.attention = QKVAttention(self.num_heads)
+
+    def forward(self, x):
+        x = torch.cat([torch.zeros_like(x[..., :1]), x], dim=-1)  # NC(T+1)
+        x = self.qkv_proj(x)
+        x = self.attention(x)
+        x = self.c_proj(x)
+        return x[..., 0]
+
+
+class QKVAttention(nn.Module):
+    """
+    Adapted from: https://github.com/openai/guided-diffusion/blob/b16b0a180ffac9da8a6a03f1e78de8e96669eee8/guided_diffusion/unet.py#L361
+    """
+
+    def __init__(self, n_heads: int):
+        super().__init__()
+        self.n_heads = n_heads
+
+    def forward(self, qkv):
+        """
+        Apply QKV attention.
+
+        :param qkv: an [N x (3 * H * C) x T] tensor of Qs, Ks, and Vs.
+        :return: an [N x (H * C) x T] tensor after attention.
+        """
+        bs, width, length = qkv.shape
+        assert width % (3 * self.n_heads) == 0
+        ch = width // (3 * self.n_heads)
+        q, k, v = qkv.chunk(3, dim=1)
+        scale = 1 / math.sqrt(math.sqrt(ch))
+        weight = torch.einsum(
+            "bct,bcs->bts",
+            (q * scale).view(bs * self.n_heads, ch, length),
+            (k * scale).view(bs * self.n_heads, ch, length),
+        )
+        weight = torch.softmax(weight, dim=-1)
+        a = torch.einsum(
+            "bts,bcs->bct", weight, v.reshape(bs * self.n_heads, ch, length)
+        )
+        return a.reshape(bs, -1, length)
