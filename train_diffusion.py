@@ -44,6 +44,10 @@ def main():
         },
     )
 
+    if os.path.exists(args.ema_path):
+        print("loading EMA from checkpoint...")
+        ema.model.load_state_dict(torch.load(args.ema_path, map_location="cpu"))
+
     opt = AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     tracker = LossTracker()
     logger = Logger(args.log_file, resume=resume)
