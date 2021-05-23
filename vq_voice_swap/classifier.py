@@ -6,8 +6,8 @@ import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 
 from .model import TimeEmbedding
-from .unet import activation, norm_act, scale_module
-from .util import ResBlock, atomic_save
+from .unet import ResBlock, activation, norm_act, scale_module
+from .util import atomic_save
 
 
 class Classifier(nn.Module):
