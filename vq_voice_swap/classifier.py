@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 
 from .model import TimeEmbedding
-from .unet import ResBlock, activation, norm_act, scale_module
+from .unet import UNetPredictor, ResBlock, activation, norm_act, scale_module
 from .util import atomic_save
 
 
@@ -65,14 +65,15 @@ class ClassifierStem(nn.Module):
     def __init__(
         self,
         base_channels: int = 32,
-        channel_mult: int = (1, 1, 2, 2, 2, 4, 4, 8, 16),
+        channel_mult: int = (1, 1, 2, 2, 2, 4, 4, 8, 8),
+        output_mult: int = 16,
         depth_mult: int = 2,
     ):
         super().__init__()
         self.base_channels = base_channels
         self.channel_mult = channel_mult
         self.depth_mult = depth_mult
-        self.out_channels = base_channels * channel_mult[-1]
+        self.out_channels = base_channels * output_mult
 
         embed_dim = base_channels * 4
         self.embed_dim = embed_dim
@@ -106,9 +107,11 @@ class ClassifierStem(nn.Module):
             )
 
         self.out = nn.Sequential(
-            norm_act(self.out_channels),
+            norm_act(cur_channels),
             AttentionPool1d(
-                self.out_channels, head_channels=min(self.out_channels, 64)
+                cur_channels,
+                head_channels=min(cur_channels, 64),
+                out_channels=self.out_channels,
             ),
         )
 
@@ -126,6 +129,13 @@ class ClassifierStem(nn.Module):
             else:
                 h = block(h, emb)
         return self.out(h)
+
+    def load_from_predictor(self, pred: UNetPredictor):
+        self.in_conv.load_state_dict(pred.in_conv.state_dict())
+        self.time_embed.load_state_dict(pred.time_embed.state_dict())
+        self.time_embed_extra.load_state_dict(pred.time_embed_extra.state_dict())
+        for dst, src in zip(self.blocks, pred.down_blocks):
+            dst.load_state_dict(src.state_dict())
 
 
 class AttentionPool1d(nn.Module):

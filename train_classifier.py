@@ -4,6 +4,7 @@ Train a voice classifier on noised inputs.
 
 import argparse
 import os
+from vq_voice_swap.unet import UNetPredictor
 
 import torch
 import torch.nn.functional as F
@@ -36,6 +37,11 @@ def main():
         print("creating new model...")
         model = Classifier(num_labels=num_labels, base_channels=args.base_channels)
         resume = False
+        if args.pretrained_path:
+            print(f"loading from pretrained model: {args.pretrained_path} ...")
+            unet = UNetPredictor(base_channels=args.base_channels)
+            unet.load_state_dict(torch.load(args.pretrained_path, map_location="cpu"))
+            model.stem.load_from_predictor(unet)
 
     print(f"total parameters: {count_params(model)}")
 
@@ -87,6 +93,7 @@ def arg_parser():
     parser.add_argument("--lr", default=1e-4, type=float)
     parser.add_argument("--weight-decay", default=0.01, type=float)
     parser.add_argument("--batch-size", default=4, type=int)
+    parser.add_argument("--pretrained-path", default=None, type=str)
     parser.add_argument("--checkpoint-path", default="model_classifier.pt", type=str)
     parser.add_argument("--save-interval", default=1000, type=int)
     parser.add_argument("--grad-checkpoint", action="store_true")
