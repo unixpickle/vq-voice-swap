@@ -6,8 +6,8 @@ import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 
 from .model import TimeEmbedding
-from .unet import activation, norm_act, normalization, scale_module
-from .util import atomic_save
+from .unet import activation, norm_act, scale_module
+from .util import ResBlock, atomic_save
 
 
 class Classifier(nn.Module):
@@ -89,19 +89,19 @@ class ClassifierStem(nn.Module):
         for ch_mult in channel_mult:
             for _ in range(depth_mult):
                 self.blocks.append(
-                    ClassifierResBlock(
-                        in_channels=cur_channels,
+                    ResBlock(
+                        channels=cur_channels,
                         out_channels=ch_mult * base_channels,
                         emb_channels=embed_dim,
                     )
                 )
                 cur_channels = ch_mult * base_channels
             self.blocks.append(
-                ClassifierResBlock(
-                    in_channels=cur_channels,
+                ResBlock(
+                    channels=cur_channels,
                     out_channels=cur_channels,
                     emb_channels=embed_dim,
-                    stride=2,
+                    scale_factor=0.5,
                 )
             )
 
@@ -128,59 +128,6 @@ class ClassifierStem(nn.Module):
         return self.out(h)
 
 
-class ClassifierResBlock(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        emb_channels: int,
-        dilation: int = 2,
-        stride: int = 1,
-    ):
-        super().__init__()
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.stride = stride
-
-        if in_channels != out_channels or stride != 1:
-            self.skip = nn.Conv1d(
-                in_channels, out_channels, 3, padding=1, stride=stride
-            )
-        else:
-            self.skip = nn.Identity()
-
-        # Adapted from the UNet ResBlock.
-        self.cond_layers = nn.Sequential(
-            activation(),
-            scale_module(nn.Linear(emb_channels, out_channels * 2), s=0.1),
-        )
-        self.pre_cond = nn.Sequential(
-            norm_act(in_channels),
-            nn.Conv1d(in_channels, out_channels, 3, stride=stride, padding=1),
-            normalization(out_channels),
-        )
-        self.post_cond = nn.Sequential(
-            activation(),
-            scale_module(
-                nn.Conv1d(
-                    out_channels,
-                    out_channels,
-                    3,
-                    padding=dilation,
-                    dilation=dilation,
-                )
-            ),
-        )
-
-    def forward(self, x: torch.Tensor, cond: torch.Tensor) -> torch.Tensor:
-        h = self.pre_cond(x)
-        cond_ab = self.cond_layers(cond)[..., None]
-        cond_a, cond_b = torch.split(cond_ab, self.out_channels, dim=1)
-        h = h * (cond_a + 1) + cond_b
-        h = self.post_cond(h)
-        return self.skip(x) + h
-
-
 class AttentionPool1d(nn.Module):
     """
     Adapted from: https://github.com/openai/guided-diffusion/blob/b16b0a180ffac9da8a6a03f1e78de8e96669eee8/guided_diffusion/unet.py#L22
@@ -201,7 +148,7 @@ class AttentionPool1d(nn.Module):
         self.num_heads = channels // head_channels
         self.attention = QKVAttention(self.num_heads)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = torch.cat([torch.zeros_like(x[..., :1]), x], dim=-1)  # NC(T+1)
         x = self.qkv_proj(x)
         x = self.attention(x)
@@ -218,7 +165,7 @@ class QKVAttention(nn.Module):
         super().__init__()
         self.n_heads = n_heads
 
-    def forward(self, qkv):
+    def forward(self, qkv: torch.Tensor) -> torch.Tensor:
         """
         Apply QKV attention.
 
