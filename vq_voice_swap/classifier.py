@@ -1,5 +1,5 @@
 import math
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import torch
 import torch.nn as nn
@@ -7,10 +7,10 @@ from torch.utils.checkpoint import checkpoint
 
 from .model import TimeEmbedding
 from .unet import UNetPredictor, ResBlock, activation, norm_act, scale_module
-from .util import atomic_save
+from .util import Savable
 
 
-class Classifier(nn.Module):
+class Classifier(Savable):
     """
     A module which adds an N-way linear layer head to a classifier stem.
     """
@@ -30,30 +30,14 @@ class Classifier(nn.Module):
         h = self.out(h)
         return h
 
-    def save(self, path):
-        """
-        Save this model and its hyperparameters to a file.
-        """
-        state = {
-            "kwargs": {
-                "num_labels": self.num_labels,
-                "base_channels": self.stem.base_channels,
-                "channel_mult": self.stem.channel_mult,
-                "depth_mult": self.stem.depth_mult,
-            },
-            "state_dict": self.state_dict(),
-        }
-        atomic_save(state, path)
-
-    @classmethod
-    def load(cls, path):
-        """
-        Load a fresh model instance from a file.
-        """
-        state = torch.load(path, map_location="cpu")
-        obj = cls(**state["kwargs"])
-        obj.load_state_dict(state["state_dict"])
-        return obj
+    def save_kwargs(self) -> Dict[str, Any]:
+        return dict(
+            num_labels=self.num_labels,
+            base_channels=self.stem.base_channels,
+            channel_mult=self.stem.channel_mult,
+            output_mult=self.stem.output_mult,
+            depth_mult=self.stem.depth_mult,
+        )
 
 
 class ClassifierStem(nn.Module):
@@ -72,6 +56,7 @@ class ClassifierStem(nn.Module):
         super().__init__()
         self.base_channels = base_channels
         self.channel_mult = channel_mult
+        self.output_mult = output_mult
         self.depth_mult = depth_mult
         self.out_channels = base_channels * output_mult
 

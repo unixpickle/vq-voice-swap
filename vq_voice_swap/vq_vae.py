@@ -1,6 +1,5 @@
 from abc import abstractmethod
 import math
-import os
 from typing import Any, Dict, Optional
 from vq_voice_swap.unet import UNetPredictor
 
@@ -10,7 +9,7 @@ import torch.nn as nn
 from .diffusion import Diffusion
 from .model import Predictor, TimeEmbedding, WaveGradEncoder, WaveGradPredictor
 from .schedule import ExpSchedule
-from .util import atomic_save
+from .util import Savable
 from .vq import VQ, VQLoss
 
 
@@ -132,7 +131,7 @@ class VQVAE(nn.Module):
         """
 
 
-class ConcreteVQVAE(VQVAE):
+class ConcreteVQVAE(VQVAE, Savable):
     def __init__(self, pred_name: str, num_labels: int, base_channels: int = 32):
         encoder = WaveGradEncoder(base_channels=base_channels)
         super().__init__(
@@ -156,30 +155,12 @@ class ConcreteVQVAE(VQVAE):
     ) -> Dict[str, torch.Tensor]:
         return dict(cond=self.cond_predictor(xs, ts, **kwargs))
 
-    def save(self, path):
-        """
-        Save this model, as well as everything needed to construct it, to a
-        file.
-        """
-        state = {
-            "kwargs": {
-                "pred_name": self.pred_name,
-                "num_labels": self.num_labels,
-                "base_channels": self.base_channels,
-            },
-            "state_dict": self.state_dict(),
-        }
-        atomic_save(state, path)
-
-    @classmethod
-    def load(cls, path):
-        """
-        Load a fresh model instance from a file.
-        """
-        state = torch.load(path, map_location="cpu")
-        obj = cls(**state["kwargs"])
-        obj.load_state_dict(state["state_dict"])
-        return obj
+    def save_kwargs(self) -> Dict[str, Any]:
+        return dict(
+            pred_name=self.pred_name,
+            num_labels=self.num_labels,
+            base_channels=self.base_channels,
+        )
 
     def downsample_rate(self):
         return predictor_downsample_rate(self.pred_name)
