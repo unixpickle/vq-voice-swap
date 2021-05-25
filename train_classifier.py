@@ -56,7 +56,6 @@ def main():
         audio_seq = data_batch["samples"][:, None].to(device)
         labels = data_batch["label"].to(device)
         ts = sample_timesteps(args, i + logger.start_step, audio_seq)
-        ts = torch.rand(len(audio_seq), device=device)
         nlls, loss = compute_losses(
             model, diffusion, audio_seq, labels, ts, use_checkpoint=args.grad_checkpoint
         )
