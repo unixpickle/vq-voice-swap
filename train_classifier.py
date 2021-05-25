@@ -91,7 +91,6 @@ def sample_timesteps(args, step, audio_seq):
     if step < args.curriculum_steps:
         frac = step / args.curriculum_steps
         power = args.curriculum_start * (1 - frac) + frac
-        print(power)
         ts = ts ** power
     return ts
 
