@@ -55,6 +55,7 @@ def main():
     for i, data_batch in enumerate(repeat_dataset(data_loader)):
         audio_seq = data_batch["samples"][:, None].to(device)
         labels = data_batch["label"].to(device)
+        ts = sample_timesteps(args, i + logger.start_step, audio_seq)
         ts = torch.rand(len(audio_seq), device=device)
         nlls, loss = compute_losses(
             model, diffusion, audio_seq, labels, ts, use_checkpoint=args.grad_checkpoint
@@ -85,6 +86,16 @@ def compute_losses(model, diffusion, audio_seq, labels, ts, **kwargs):
     return nlls, loss
 
 
+def sample_timesteps(args, step, audio_seq):
+    ts = torch.rand(len(audio_seq), device=audio_seq.device)
+    if step < args.curriculum_steps:
+        frac = step / args.curriculum_steps
+        power = args.curriculum_start * (1 - frac) + frac
+        print(power)
+        ts = ts ** power
+    return ts
+
+
 def arg_parser():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -98,6 +109,8 @@ def arg_parser():
     parser.add_argument("--save-interval", default=1000, type=int)
     parser.add_argument("--grad-checkpoint", action="store_true")
     parser.add_argument("--log-file", default="train_classifier_log.txt")
+    parser.add_argument("--curriculum-start", default=10.0, type=float)
+    parser.add_argument("--curriculum-steps", default=0, type=int)
     parser.add_argument("data_dir", type=str)
     return parser
 
