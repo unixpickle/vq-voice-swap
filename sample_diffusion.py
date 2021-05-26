@@ -26,7 +26,7 @@ def main():
     model.to(device)
 
     if args.classifier_path:
-        classifier = Classifier.load(args.classifier_path)
+        classifier = Classifier.load(args.classifier_path).to(device)
 
         def cond_fn(x, ts):
             with torch.enable_grad():
@@ -34,7 +34,7 @@ def main():
                 logits = classifier(x, ts, use_checkpoint=args.grad_checkpoint)
                 logprobs = F.log_softmax(logits, dim=-1)
                 grads = torch.autograd.grad(logprobs[:, args.classifier_class], x)[0]
-                return grads.detach()
+                return grads.detach() * args.classifier_scale
 
     else:
         cond_fn = None
