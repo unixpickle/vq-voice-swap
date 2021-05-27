@@ -85,6 +85,7 @@ class Diffusion:
         sigma_large: bool = False,
         constrain: bool = False,
         cond_fn: Callable = None,
+        schedule: Callable = None,
     ):
         """
         Sample x_0 from x_t using reverse diffusion.
@@ -99,6 +100,10 @@ class Diffusion:
 
         for i, t in its:
             ts = torch.tensor([t] * x_T.shape[0]).to(x_T)
+            if schedule is not None:
+                t_step = schedule(ts) - schedule(ts - 1 / steps)
+                ts = schedule(ts)
+
             with torch.no_grad():
                 eps = predictor(x_t, ts)
                 if constrain:

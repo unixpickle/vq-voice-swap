@@ -17,6 +17,8 @@ from vq_voice_swap.vq_vae import make_predictor
 def main():
     args = arg_parser().parse_args()
 
+    schedule = eval(args.schedule)
+
     diffusion = Diffusion(ExpSchedule())
     model = make_predictor(args.predictor, base_channels=args.base_channels)
 
@@ -47,6 +49,7 @@ def main():
         progress=True,
         constrain=args.constrain,
         cond_fn=cond_fn,
+        schedule=schedule,
     )
 
     writer = ChunkWriter(args.sample_path, 16000)
@@ -68,6 +71,7 @@ def arg_parser():
     parser.add_argument("--classifier-path", default=None, type=str)
     parser.add_argument("--classifier-scale", default=1.0, type=float)
     parser.add_argument("--classifier-class", default=0, type=int)
+    parser.add_argument("--schedule", default="lambda t: t", type=str)
     return parser
 
 
