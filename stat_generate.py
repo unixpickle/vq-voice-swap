@@ -9,6 +9,7 @@ from typing import Iterable, Iterator, List, Optional
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 from vq_voice_swap.classifier import Classifier
 from vq_voice_swap.dataset import ChunkReader, create_data_loader, lookup_audio_duration
@@ -24,18 +25,29 @@ def main():
     classifier.to(device)
 
     features = []
-    logits = []
+    probs = []
     for batch in batch_segments(args.batch_size, segments):
         ts = torch.zeros(len(batch)).to(device)
         batch = batch.to(device)
         with torch.no_grad():
             fv = classifier.stem(batch, ts)
             features.extend(fv.cpu().numpy())
-            logits.extend(classifier.out(fv).cpu().numpy())
+            probs.extend(F.softmax(classifier.out(fv), dim=-1).cpu().numpy())
 
-    # TODO: compute statistics for feature vectors
-    # TODO: compute IS-like metric based on logits
-    # TODO: save information to a npz file
+    features = np.stack(features, axis=0)
+    probs = np.stack(probs, axis=0)
+
+    mean = np.mean(features, axis=0)
+    cov = np.cov(features, rowvar=False)
+
+    # Based on inception score.
+    # https://github.com/openai/improved-gan/blob/4f5d1ec5c16a7eceb206f42bfc652693601e1d5c/inception_score/model.py#L49
+    kl = probs * (np.log(probs) - np.log(np.expand_dims(np.mean(probs, 0), 0)))
+    kl = np.mean(np.sum(kl, 1))
+    score = np.exp(kl)
+    print(f"classifier score: {score}")
+
+    np.savez(args.output_path, mean=mean, cov=cov, probs=probs, class_score=score)
 
 
 def batch_segments(
@@ -45,10 +57,10 @@ def batch_segments(
     for seg in segs:
         batch.append(seg)
         if len(batch) == batch_size:
-            yield torch.stack(batch)[:, 1]
+            yield torch.stack(batch)[:, None]
             batch = []
     if len(batch):
-        yield torch.stack(batch)[:, 1]
+        yield torch.stack(batch)[:, None]
 
 
 def load_segments(args) -> Iterator[torch.Tensor]:
@@ -59,7 +71,7 @@ def load_segments(args) -> Iterator[torch.Tensor]:
             message="must specify --data-dir or --sample-dir, but not both"
         )
     if args.data_dir is not None:
-        loader = create_data_loader(args.data_dir, batch_size=1)
+        loader, _ = create_data_loader(args.data_dir, batch_size=1)
         return segments_from_loader(args.num_samples, loader)
     else:
         files = [
@@ -100,6 +112,7 @@ def arg_parser():
     parser.add_argument("--num-samples", default=None, type=None)
     parser.add_argument("--sample-dir", default=None, type=str)
     parser.add_argument("--data-dir", default=None, type=str)
+    parser.add_argument("output_path", type=str)
     return parser
 
 
