@@ -10,6 +10,7 @@ from typing import Iterable, Iterator, List, Optional
 import numpy as np
 import torch
 import torch.nn.functional as F
+from tqdm.auto import tqdm
 
 from vq_voice_swap.classifier import Classifier
 from vq_voice_swap.dataset import ChunkReader, create_data_loader, lookup_audio_duration
@@ -26,7 +27,7 @@ def main():
 
     features = []
     probs = []
-    for batch in batch_segments(args.batch_size, segments):
+    for batch in batch_segments(args.batch_size, tqdm(segments)):
         ts = torch.zeros(len(batch)).to(device)
         batch = batch.to(device)
         with torch.no_grad():
