@@ -148,7 +148,7 @@ def _build_file_index(data_dir: str) -> Dict[str, Union[Dict, float]]:
     for item in os.listdir(data_dir):
         item_path = os.path.join(data_dir, item)
         if item.endswith(".flac") and not item.startswith("."):
-            result[item] = _lookup_audio_duration(item_path)
+            result[item] = lookup_audio_duration(item_path)
         elif os.path.isdir(item_path):
             sub_result = _build_file_index(item_path)
             if len(sub_result):
@@ -291,7 +291,7 @@ class ChunkWriter:
         self._ffmpeg_proc.wait()
 
 
-def _lookup_audio_duration(path: str) -> float:
+def lookup_audio_duration(path: str) -> float:
     p = subprocess.Popen(
         ["ffmpeg", "-i", path],
         stdin=subprocess.DEVNULL,
