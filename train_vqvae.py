@@ -14,7 +14,7 @@ from vq_voice_swap.ema import ModelEMA
 from vq_voice_swap.logger import Logger
 from vq_voice_swap.loss_tracker import LossTracker
 from vq_voice_swap.util import count_params, repeat_dataset
-from vq_voice_swap.vq_vae import CascadeVQVAE
+from vq_voice_swap.vq_vae import ConcreteVQVAE
 
 
 def main():
@@ -27,12 +27,12 @@ def main():
     if os.path.exists(args.checkpoint_path):
         print("loading from checkpoint...")
         resume = True
-        model = CascadeVQVAE.load(args.checkpoint_path)
+        model = ConcreteVQVAE.load(args.checkpoint_path)
         assert model.num_labels == num_labels
     else:
         print("creating new model...")
         resume = False
-        model = CascadeVQVAE(
+        model = ConcreteVQVAE(
             args.predictor, num_labels, base_channels=args.base_channels
         )
 

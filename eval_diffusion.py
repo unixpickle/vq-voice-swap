@@ -9,23 +9,20 @@ import torch
 import torch.nn as nn
 
 from vq_voice_swap.dataset import create_data_loader
-from vq_voice_swap.diffusion import Diffusion
+from vq_voice_swap.diffusion_model import DiffusionModel
 from vq_voice_swap.loss_tracker import LossTracker
-from vq_voice_swap.schedule import ExpSchedule
 from vq_voice_swap.vq_vae import make_predictor
 
 
 def main():
     args = arg_parser().parse_args()
 
-    diffusion = Diffusion(ExpSchedule())
     data_loader, _ = create_data_loader(
         directory=args.data_dir, batch_size=args.batch_size
     )
 
     print("loading model from checkpoint...")
-    model = make_predictor(args.predictor, base_channels=args.base_channels)
-    model.load_state_dict(torch.load(args.checkpoint_path, map_location="cpu"))
+    model = DiffusionModel.load(args.checkpoint_path)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -37,9 +34,9 @@ def main():
         audio_seq = data_batch["samples"][:, None].to(device)
         ts = torch.rand(args.batch_size, device=device)
         noise = torch.randn_like(audio_seq)
-        samples = diffusion.sample_q(audio_seq, ts, epsilon=noise)
+        samples = model.diffusion.sample_q(audio_seq, ts, epsilon=noise)
         with torch.no_grad():
-            noise_pred = model(samples, ts)
+            noise_pred = model.predictor(samples, ts)
         losses = ((noise - noise_pred) ** 2).flatten(1).mean(dim=1)
 
         tracker.add(ts, losses)
@@ -55,8 +52,6 @@ def arg_parser():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument("--predictor", default="wavegrad", type=str)
-    parser.add_argument("--base-channels", default=32, type=int)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("checkpoint_path", type=str)
     parser.add_argument("data_dir", type=str)

@@ -1,3 +1,7 @@
+"""
+Flexible audio sequence classification models.
+"""
+
 import math
 from typing import Any, Dict, Optional
 
@@ -5,9 +9,9 @@ import torch
 import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 
-from .model import TimeEmbedding
+from .base import Savable
 from .unet import UNetPredictor, ResBlock, activation, norm_act, scale_module
-from .util import Savable
+from .wavegrad import TimeEmbedding
 
 
 class Classifier(Savable):

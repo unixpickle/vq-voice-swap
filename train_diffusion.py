@@ -10,11 +10,10 @@ import torch
 from torch.optim import AdamW
 
 from vq_voice_swap.dataset import create_data_loader
-from vq_voice_swap.diffusion import Diffusion
+from vq_voice_swap.diffusion_model import DiffusionModel
 from vq_voice_swap.ema import ModelEMA
 from vq_voice_swap.logger import Logger
 from vq_voice_swap.loss_tracker import LossTracker
-from vq_voice_swap.schedule import ExpSchedule
 from vq_voice_swap.util import atomic_save, count_params, repeat_dataset
 from vq_voice_swap.vq_vae import make_predictor
 
@@ -22,14 +21,17 @@ from vq_voice_swap.vq_vae import make_predictor
 def main():
     args = arg_parser().parse_args()
 
-    diffusion = Diffusion(ExpSchedule())
-    model = make_predictor(args.predictor, base_channels=args.base_channels)
-
     if os.path.exists(args.checkpoint_path):
         print("loading from checkpoint...")
-        model.load_state_dict(torch.load(args.checkpoint_path, map_location="cpu"))
+        model = DiffusionModel.load(args.checkpoint_path)
         resume = True
     else:
+        print("creating new model")
+        model = DiffusionModel(
+            pred_name=args.predictor,
+            base_channels=args.base_channels,
+            schedule_name=args.schedule,
+        )
         resume = False
 
     print(f"total parameters: {count_params(model)}")
@@ -46,7 +48,7 @@ def main():
 
     if os.path.exists(args.ema_path):
         print("loading EMA from checkpoint...")
-        ema.model.load_state_dict(torch.load(args.ema_path, map_location="cpu"))
+        ema.model = DiffusionModel.load(args.ema_path)
 
     opt = AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     tracker = LossTracker()
@@ -59,8 +61,8 @@ def main():
         audio_seq = data_batch["samples"][:, None].to(device)
         ts = torch.rand(args.batch_size, device=device)
         noise = torch.randn_like(audio_seq)
-        samples = diffusion.sample_q(audio_seq, ts, epsilon=noise)
-        noise_pred = model(samples, ts, use_checkpoint=args.grad_checkpoint)
+        samples = model.diffusion.sample_q(audio_seq, ts, epsilon=noise)
+        noise_pred = model.predictor(samples, ts, use_checkpoint=args.grad_checkpoint)
         losses = ((noise - noise_pred) ** 2).flatten(1).mean(dim=1)
         loss = losses.mean()
 
@@ -74,8 +76,8 @@ def main():
         logger.log(step, mse=loss.item(), **tracker.log_dict())
 
         if step % args.save_interval == 0:
-            atomic_save(model.state_dict(), args.checkpoint_path)
-            atomic_save(ema.model.state_dict(), args.ema_path)
+            model.save(args.checkpoint_path)
+            ema.model.save(args.ema_path)
 
 
 def arg_parser():
@@ -84,6 +86,7 @@ def arg_parser():
     )
     parser.add_argument("--predictor", default="wavegrad", type=str)
     parser.add_argument("--base-channels", default=32, type=int)
+    parser.add_argument("--schedule", default="exp", type=str)
     parser.add_argument("--lr", default=1e-4, type=float)
     parser.add_argument("--ema-rate", default=0.9999, type=float)
     parser.add_argument("--weight-decay", default=0.0, type=float)

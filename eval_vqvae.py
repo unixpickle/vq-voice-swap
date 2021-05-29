@@ -11,7 +11,7 @@ import torch.nn as nn
 
 from vq_voice_swap.dataset import create_data_loader
 from vq_voice_swap.loss_tracker import LossTracker
-from vq_voice_swap.vq_vae import CascadeWaveGradVQVAE
+from vq_voice_swap.vq_vae import ConcreteVQVAE
 
 
 def main():
@@ -22,23 +22,17 @@ def main():
     )
 
     print("loading model from checkpoint...")
-    model = CascadeWaveGradVQVAE.load(args.checkpoint_path)
+    model = ConcreteVQVAE.load(args.checkpoint_path)
     assert model.num_labels == num_labels
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
     trackers = {
-        key: LossTracker(avg_size=1_000_000, prefix=f"{key}_")
-        for key in ["base", "label", "cond"]
+        key: LossTracker(avg_size=1_000_000, prefix=f"{key}_") for key in ["cond"]
     }
     output_stats = [
-        OutputStats(module, key)
-        for key, module in (
-            ("base", model.base_predictor),
-            ("label", model.scale_label),
-            ("cond", model.scale_cond),
-        )
+        OutputStats(module, key) for key, module in (("cond", model.cond_predictor),)
     ]
 
     num_samples = 0

@@ -4,18 +4,17 @@ Train a voice classifier on noised inputs.
 
 import argparse
 import os
-from vq_voice_swap.unet import UNetPredictor
 
 import torch
 import torch.nn.functional as F
 from torch.optim import AdamW
 
-from vq_voice_swap.classifier import Classifier
 from vq_voice_swap.dataset import create_data_loader
-from vq_voice_swap.diffusion import Diffusion
+from vq_voice_swap.diffusion import Diffusion, make_schedule
+from vq_voice_swap.diffusion_model import DiffusionModel
 from vq_voice_swap.logger import Logger
 from vq_voice_swap.loss_tracker import LossTracker
-from vq_voice_swap.schedule import ExpSchedule
+from vq_voice_swap.models import Classifier
 from vq_voice_swap.util import count_params, repeat_dataset
 
 
@@ -26,7 +25,7 @@ def main():
         directory=args.data_dir, batch_size=args.batch_size
     )
 
-    diffusion = Diffusion(ExpSchedule())
+    diffusion = Diffusion(make_schedule(args.schedule))
 
     if os.path.exists(args.checkpoint_path):
         print("loading from checkpoint...")
@@ -39,9 +38,8 @@ def main():
         resume = False
         if args.pretrained_path:
             print(f"loading from pretrained model: {args.pretrained_path} ...")
-            unet = UNetPredictor(base_channels=args.base_channels)
-            unet.load_state_dict(torch.load(args.pretrained_path, map_location="cpu"))
-            model.stem.load_from_predictor(unet)
+            dm = DiffusionModel.load(args.pretrained_path)
+            model.stem.load_from_predictor(dm.predictor)
 
     print(f"total parameters: {count_params(model)}")
 
@@ -99,6 +97,7 @@ def arg_parser():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument("--base-channels", default=32, type=int)
+    parser.add_argument("--schedule", default="exp", type=str)
     parser.add_argument("--lr", default=1e-4, type=float)
     parser.add_argument("--weight-decay", default=0.01, type=float)
     parser.add_argument("--batch-size", default=4, type=int)

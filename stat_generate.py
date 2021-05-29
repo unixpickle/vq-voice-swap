@@ -13,8 +13,8 @@ import torch
 import torch.nn.functional as F
 from tqdm.auto import tqdm
 
-from vq_voice_swap.classifier import Classifier
 from vq_voice_swap.dataset import ChunkReader, create_data_loader, lookup_audio_duration
+from vq_voice_swap.models import Classifier
 
 
 def main():

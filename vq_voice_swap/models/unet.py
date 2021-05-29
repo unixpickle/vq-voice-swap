@@ -9,7 +9,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
-from .model import Predictor, TimeEmbedding
+from .base import Predictor
+from .wavegrad import TimeEmbedding
 
 
 class UNetPredictor(Predictor):

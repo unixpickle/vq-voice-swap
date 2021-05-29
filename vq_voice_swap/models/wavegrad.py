@@ -1,5 +1,8 @@
-from abc import abstractmethod
-import functools
+"""
+A model similar to that in GAN-TTS (https://arxiv.org/abs/1909.11646v2)
+and WaveGrad (https://arxiv.org/abs/2009.00713).
+"""
+
 import math
 from typing import Optional
 
@@ -7,24 +10,10 @@ import torch
 import torch.nn as nn
 from torch.utils.checkpoint import checkpoint, checkpoint_sequential
 
-
-class Predictor(nn.Module):
-    @abstractmethod
-    def forward(self, xs: torch.Tensor, ts: torch.Tensor, **kwargs):
-        """
-        Apply the epsilon predictor to a batch of noised inputs.
-        """
-
-    def condition(self, **kwargs):
-        return functools.partial(self, **kwargs)
+from .base import Predictor
 
 
 class WaveGradPredictor(Predictor):
-    """
-    A model similar to that in GAN-TTS (https://arxiv.org/abs/1909.11646v2)
-    and WaveGrad (https://arxiv.org/abs/2009.00713).
-    """
-
     def __init__(
         self,
         cond_mult: int = 16,
