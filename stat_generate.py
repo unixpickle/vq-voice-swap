@@ -4,6 +4,7 @@ features. Also computes a class score similar to Inception Score.
 """
 
 import argparse
+import multiprocessing as mp
 import os
 from typing import Iterable, Iterator, List, Optional
 
@@ -97,11 +98,16 @@ def segments_from_loader(
 
 
 def segments_from_files(files: List[str]) -> Iterator[torch.Tensor]:
-    for file in files:
-        duration = lookup_audio_duration(file)
-        cr = ChunkReader(file, sample_rate=16000)
-        chunk = cr.read(16000 * int(duration + 2))  # make sure we read the whole file
-        yield torch.from_numpy(chunk)
+    ctx = mp.get_context("spawn")
+    with ctx.Pool(4) as pool:
+        for x in pool.imap_unordered(_read_audio_file, files):
+            yield torch.from_numpy(x)
+
+
+def _read_audio_file(path: str) -> np.ndarary:
+    duration = lookup_audio_duration(path)  # may not be precise
+    cr = ChunkReader(path, sample_rate=16000)
+    return cr.read(16000 * int(duration + 2))
 
 
 def arg_parser():
