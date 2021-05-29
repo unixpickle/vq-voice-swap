@@ -18,13 +18,40 @@ def main():
     args = arg_parser().parse_args()
     segments = load_segments(args)
 
-    # TODO: aggregate segments into batches
-    # TODO: run each batch through a pre-trained classifier
+    classifier = Classifier.load(args.checkpoint_path)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    classifier.to(device)
+
+    features = []
+    logits = []
+    for batch in batch_segments(args.batch_size, segments):
+        ts = torch.zeros(len(batch)).to(device)
+        batch = batch.to(device)
+        with torch.no_grad():
+            fv = classifier.stem(batch, ts)
+            features.extend(fv.cpu().numpy())
+            logits.extend(classifier.out(fv).cpu().numpy())
+
     # TODO: compute statistics for feature vectors
     # TODO: compute IS-like metric based on logits
+    # TODO: save information to a npz file
 
 
-def load_segments(args) -> Iterable[torch.Tensor]:
+def batch_segments(
+    batch_size: int, segs: Iterator[torch.Tensor]
+) -> Iterator[torch.Tensor]:
+    batch = []
+    for seg in segs:
+        batch.append(seg)
+        if len(batch) == batch_size:
+            yield torch.stack(batch)[:, 1]
+            batch = []
+    if len(batch):
+        yield torch.stack(batch)[:, 1]
+
+
+def load_segments(args) -> Iterator[torch.Tensor]:
     if (args.data_dir is None and args.sample_dir is None) or (
         args.data_dir is not None and args.sample_dir is not None
     ):
@@ -69,6 +96,7 @@ def arg_parser():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument("--checkpoint-path", default="model_classifier.pt", type=str)
+    parser.add_argument("--batch-size", default=4, type=int)
     parser.add_argument("--num-samples", default=None, type=None)
     parser.add_argument("--sample-dir", default=None, type=str)
     parser.add_argument("--data-dir", default=None, type=str)
