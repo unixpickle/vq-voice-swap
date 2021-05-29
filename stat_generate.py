@@ -104,7 +104,7 @@ def segments_from_files(files: List[str]) -> Iterator[torch.Tensor]:
             yield torch.from_numpy(x)
 
 
-def _read_audio_file(path: str) -> np.ndarary:
+def _read_audio_file(path: str) -> np.ndarray:
     duration = lookup_audio_duration(path)  # may not be precise
     cr = ChunkReader(path, sample_rate=16000)
     return cr.read(16000 * int(duration + 2))
