@@ -28,11 +28,11 @@ These evals use a [pre-trained speaker classifier](http://data.aqnichol.com/vq-v
 Here are all of the models I've trained (and released), with their corresponding evals. Each model links to a directory with samples, evaluation statistics, and the model checkpoints:
 
  * [unet32](http://data.aqnichol.com/vq-voice-swap/unet32): a 10M parameter UNet model with the default noise schedule. For this model, I sampled with 50 steps using a sample-time schedule `t = s^2` where `s` is linearly spaced.
-  * Class score: 47.1
-  * Frechet score: 2494
+   * Class score: 47.1
+   * Frechet score: 2494
  * [unet64](http://data.aqnichol.com/vq-voice-swap/unet64/): a 50M parameter model which is otherwise similar to the unet32, but with some learning rate annealing at the end of training.
-  * Class score: 69.0
-  * Frechet score: 1834
+   * Class score: 69.0
+   * Frechet score: 1834
  * [unet64/early_stopped](http://data.aqnichol.com/vq-voice-swap/unet64/early_stopped/): like unet64, but *without* learning rate annealing. Surprisingly, the Frechet score is much better, suggesting some kind of overfitting.
-  * Class score: 51.5
-  * Frechet score: 855
+   * Class score: 51.5
+   * Frechet score: 855
