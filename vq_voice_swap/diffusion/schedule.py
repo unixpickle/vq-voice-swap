@@ -29,3 +29,13 @@ class ExpSchedule(Schedule):
 
     def __call__(self, t: torch.Tensor) -> torch.Tensor:
         return torch.exp(-self.k * (t ** 2))
+
+
+class CosSchedule(Schedule):
+    """
+    The squared cosine schedule cos(t*pi/2)^2, introduced by
+    https://arxiv.org/abs/2102.09672.
+    """
+
+    def __call__(self, t: torch.Tensor) -> torch.Tensor:
+        return torch.cos(t * math.pi / 2) ** 2

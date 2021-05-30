@@ -1,4 +1,4 @@
-from .schedule import Schedule, ExpSchedule
+from .schedule import CosSchedule, Schedule, ExpSchedule
 
 
 def make_schedule(name: str) -> Schedule:
@@ -7,5 +7,7 @@ def make_schedule(name: str) -> Schedule:
     """
     if name == "exp":
         return ExpSchedule()
+    elif name == "cos":
+        return CosSchedule()
     else:
         raise ValueError(f"unknown schedule: {name}")
