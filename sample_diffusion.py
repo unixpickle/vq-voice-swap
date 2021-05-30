@@ -34,7 +34,7 @@ def main():
                     torch.tensor([args.classifier_class] * len(x)).long().to(device)
                 )
             else:
-                target_class = torch.randint_like(x, high=classifier.num_labels).long()
+                target_class = torch.randint_like(ts, high=classifier.num_labels).long()
             with torch.enable_grad():
                 x = x.detach().clone().requires_grad_()
                 logits = classifier(x, ts, use_checkpoint=args.grad_checkpoint)
