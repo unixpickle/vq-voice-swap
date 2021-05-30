@@ -29,11 +29,19 @@ def main():
         classifier = Classifier.load(args.classifier_path).to(device)
 
         def cond_fn(x, ts):
+            if args.classifier_class is not None:
+                target_class = (
+                    torch.tensor([args.classifier_class] * len(x)).long().to(device)
+                )
+            else:
+                target_class = torch.randint_like(x, high=classifier.num_labels).long()
             with torch.enable_grad():
                 x = x.detach().clone().requires_grad_()
                 logits = classifier(x, ts, use_checkpoint=args.grad_checkpoint)
                 logprobs = F.log_softmax(logits, dim=-1)
-                grads = torch.autograd.grad(logprobs[:, args.classifier_class], x)[0]
+                grads = torch.autograd.grad(
+                    logprobs[range(len(x)), target_class].sum(), x
+                )[0]
                 return grads.detach() * args.classifier_scale
 
     else:
@@ -104,7 +112,7 @@ def arg_parser():
     parser.add_argument("--grad-checkpoint", action="store_true")
     parser.add_argument("--classifier-path", default=None, type=str)
     parser.add_argument("--classifier-scale", default=1.0, type=float)
-    parser.add_argument("--classifier-class", default=0, type=int)
+    parser.add_argument("--classifier-class", default=None, type=int)
     parser.add_argument("--schedule", default="lambda t: t", type=str)
     return parser
 
