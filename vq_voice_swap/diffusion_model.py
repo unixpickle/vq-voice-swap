@@ -18,6 +18,7 @@ class DiffusionModel(Savable):
         schedule_name: str = "exp",
         num_labels: Optional[int] = None,
         cond_channels: Optional[int] = None,
+        dropout: float = 0.0,
     ):
         super().__init__()
         self.pred_name = pred_name
@@ -25,12 +26,14 @@ class DiffusionModel(Savable):
         self.schedule_name = schedule_name
         self.num_labels = num_labels
         self.cond_channels = cond_channels
+        self.dropout = (dropout,)
 
         self.predictor = make_predictor(
             pred_name,
             base_channels=base_channels,
             cond_channels=cond_channels,
             num_labels=num_labels,
+            dropout=dropout,
         )
         self.diffusion = Diffusion(make_schedule(schedule_name))
 
@@ -44,4 +47,5 @@ class DiffusionModel(Savable):
             schedule_name=self.schedule_name,
             num_labels=self.num_labels,
             cond_channels=self.cond_channels,
+            dropout=self.dropout,
         )

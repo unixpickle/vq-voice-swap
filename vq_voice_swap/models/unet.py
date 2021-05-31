@@ -24,6 +24,7 @@ class UNetPredictor(Predictor):
         num_labels: Optional[int] = None,
         in_channels: int = 1,
         out_channels: int = 1,
+        dropout: float = 0.0,
     ):
         super().__init__()
         self.base_channels = base_channels
@@ -58,6 +59,7 @@ class UNetPredictor(Predictor):
                         channels=cur_channels,
                         emb_channels=embed_dim,
                         out_channels=mult * base_channels,
+                        dropout=dropout,
                     )
                 )
                 cur_channels = mult * base_channels
@@ -68,6 +70,7 @@ class UNetPredictor(Predictor):
                         channels=cur_channels,
                         emb_channels=embed_dim,
                         scale_factor=0.5,
+                        dropout=dropout,
                     ),
                 )
                 skip_channels.append(cur_channels)
@@ -78,6 +81,7 @@ class UNetPredictor(Predictor):
                     channels=cur_channels,
                     emb_channels=embed_dim,
                     dilation=d,
+                    dropout=dropout,
                 )
                 for d in middle_dilations
             ]
@@ -92,13 +96,17 @@ class UNetPredictor(Predictor):
                         channels=cur_channels + in_ch,
                         emb_channels=embed_dim,
                         out_channels=mult * base_channels,
+                        dropout=dropout,
                     )
                 )
                 cur_channels = mult * base_channels
             if depth:
                 self.up_blocks.append(
                     ResBlock(
-                        channels=cur_channels, emb_channels=embed_dim, scale_factor=2.0
+                        channels=cur_channels,
+                        emb_channels=embed_dim,
+                        scale_factor=2.0,
+                        dropout=dropout,
                     )
                 )
 
@@ -163,12 +171,14 @@ class ResBlock(nn.Module):
         out_channels: Optional[int] = None,
         scale_factor: float = 1.0,
         dilation: int = 2,
+        dropout: float = 0.0,
     ):
         super().__init__()
         self.channels = channels
         self.emb_channels = emb_channels
         self.out_channels = out_channels or channels
         self.scale_factor = scale_factor
+        self.dropout = dropout
 
         skip_conv = nn.Identity()
         if self.channels != self.out_channels:
@@ -189,18 +199,26 @@ class ResBlock(nn.Module):
             nn.Conv1d(self.channels, self.out_channels, 3, padding=1),
             normalization(self.out_channels),
         )
-        self.post_cond = nn.Sequential(
-            activation(),
-            scale_module(
-                nn.Conv1d(
-                    self.out_channels,
-                    self.out_channels,
-                    3,
-                    padding=dilation,
-                    dilation=dilation,
-                )
-            ),
+        out_conv = scale_module(
+            nn.Conv1d(
+                self.out_channels,
+                self.out_channels,
+                3,
+                padding=dilation,
+                dilation=dilation,
+            )
         )
+        if self.dropout:
+            self.post_cond = nn.Sequential(
+                activation(),
+                nn.Dropout(p=dropout),
+                out_conv,
+            )
+        else:
+            self.post_cond = nn.Sequential(
+                activation(),
+                out_conv,
+            )
 
     def forward(self, x: torch.Tensor, cond: torch.Tensor) -> torch.Tensor:
         h = self.pre_cond(x)

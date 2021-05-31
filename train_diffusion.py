@@ -31,6 +31,7 @@ def main():
             pred_name=args.predictor,
             base_channels=args.base_channels,
             schedule_name=args.schedule,
+            dropout=args.dropout,
         )
         resume = False
 
@@ -86,6 +87,7 @@ def arg_parser():
     )
     parser.add_argument("--predictor", default="wavegrad", type=str)
     parser.add_argument("--base-channels", default=32, type=int)
+    parser.add_argument("--dropout", default=0.0, type=float)
     parser.add_argument("--schedule", default="exp", type=str)
     parser.add_argument("--lr", default=1e-4, type=float)
     parser.add_argument("--ema-rate", default=0.9999, type=float)
