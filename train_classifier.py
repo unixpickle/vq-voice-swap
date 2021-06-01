@@ -12,6 +12,7 @@ from torch.optim import AdamW
 from vq_voice_swap.dataset import create_data_loader
 from vq_voice_swap.diffusion import Diffusion, make_schedule
 from vq_voice_swap.diffusion_model import DiffusionModel
+from vq_voice_swap.ema import ModelEMA
 from vq_voice_swap.logger import Logger
 from vq_voice_swap.loss_tracker import LossTracker
 from vq_voice_swap.models import Classifier
@@ -46,6 +47,11 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
+    ema = ModelEMA(model, rates={"": args.ema_rate})
+    if os.path.exists(args.ema_path):
+        print("loading EMA from checkpoint...")
+        ema.model = Classifier.load(args.ema_path)
+
     opt = AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     tracker = LossTracker()
     logger = Logger(args.log_file, resume=resume)
@@ -66,6 +72,7 @@ def main():
         opt.zero_grad()
         loss.backward()
         opt.step()
+        ema.update()
 
         step = i + 1
         tracker.add(ts, nlls)
@@ -73,6 +80,7 @@ def main():
 
         if step % args.save_interval == 0:
             model.save(args.checkpoint_path)
+            ema.model.save(args.ema_path)
 
 
 def compute_losses(model, diffusion, audio_seq, labels, ts, **kwargs):
@@ -99,10 +107,12 @@ def arg_parser():
     parser.add_argument("--base-channels", default=32, type=int)
     parser.add_argument("--schedule", default="exp", type=str)
     parser.add_argument("--lr", default=1e-4, type=float)
+    parser.add_argument("--ema_rate", default=0.999, type=float)
     parser.add_argument("--weight-decay", default=0.01, type=float)
     parser.add_argument("--batch-size", default=4, type=int)
     parser.add_argument("--pretrained-path", default=None, type=str)
     parser.add_argument("--checkpoint-path", default="model_classifier.pt", type=str)
+    parser.add_argument("--ema-path", default="model_classifier_ema.pt", type=str)
     parser.add_argument("--save-interval", default=1000, type=int)
     parser.add_argument("--grad-checkpoint", action="store_true")
     parser.add_argument("--log-file", default="train_classifier_log.txt")
