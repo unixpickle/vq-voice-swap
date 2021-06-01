@@ -4,14 +4,11 @@ Evaluate how well a diffusion model performs.
 
 import argparse
 
-import numpy as np
 import torch
-import torch.nn as nn
 
 from vq_voice_swap.dataset import create_data_loader
 from vq_voice_swap.diffusion_model import DiffusionModel
 from vq_voice_swap.loss_tracker import LossTracker
-from vq_voice_swap.vq_vae import make_predictor
 
 
 def main():

@@ -14,8 +14,7 @@ from vq_voice_swap.diffusion_model import DiffusionModel
 from vq_voice_swap.ema import ModelEMA
 from vq_voice_swap.logger import Logger
 from vq_voice_swap.loss_tracker import LossTracker
-from vq_voice_swap.util import atomic_save, count_params, repeat_dataset
-from vq_voice_swap.vq_vae import make_predictor
+from vq_voice_swap.util import count_params, repeat_dataset
 
 
 def main():
@@ -40,12 +39,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    ema = ModelEMA(
-        model,
-        rates={
-            "": args.ema_rate,
-        },
-    )
+    ema = ModelEMA(model, rates={"": args.ema_rate})
 
     if os.path.exists(args.ema_path):
         print("loading EMA from checkpoint...")
