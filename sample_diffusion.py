@@ -24,9 +24,11 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
+    model.eval()
 
     if args.classifier_path:
         classifier = Classifier.load(args.classifier_path).to(device)
+        classifier.eval()
 
         def cond_fn(x, ts):
             if args.classifier_class is not None:
