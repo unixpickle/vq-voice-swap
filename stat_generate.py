@@ -116,7 +116,7 @@ def arg_parser():
     )
     parser.add_argument("--checkpoint-path", default="model_classifier.pt", type=str)
     parser.add_argument("--batch-size", default=4, type=int)
-    parser.add_argument("--num-samples", default=None, type=None)
+    parser.add_argument("--num-samples", default=None, type=int)
     parser.add_argument("--sample-dir", default=None, type=str)
     parser.add_argument("--data-dir", default=None, type=str)
     parser.add_argument("output_path", type=str)

@@ -26,7 +26,7 @@ class DiffusionModel(Savable):
         self.schedule_name = schedule_name
         self.num_labels = num_labels
         self.cond_channels = cond_channels
-        self.dropout = (dropout,)
+        self.dropout = dropout
 
         self.predictor = make_predictor(
             pred_name,
