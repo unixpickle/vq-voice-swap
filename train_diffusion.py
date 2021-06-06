@@ -43,7 +43,7 @@ def main():
 
     if os.path.exists(args.ema_path):
         print("loading EMA from checkpoint...")
-        ema.model = DiffusionModel.load(args.ema_path)
+        ema.model = DiffusionModel.load(args.ema_path).to(device)
 
     opt = AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     tracker = LossTracker()
