@@ -26,14 +26,16 @@ class DiffusionModel(Savable):
         self.schedule_name = schedule_name
         self.num_labels = num_labels
         self.cond_channels = cond_channels
-        self.dropout = dropout
+
+        # Fix bug in some checkpoints where dropout is a tuple.
+        self.dropout = dropout[0] if isinstance(dropout, tuple) else dropout
 
         self.predictor = make_predictor(
             pred_name,
             base_channels=base_channels,
             cond_channels=cond_channels,
             num_labels=num_labels,
-            dropout=dropout,
+            dropout=self.dropout,
         )
         self.diffusion = Diffusion(make_schedule(schedule_name))
 
