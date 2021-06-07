@@ -51,6 +51,7 @@ class Diffusion:
         epsilon_prediction: torch.Tensor,
         noise: torch.Tensor = None,
         sigma_large: bool = False,
+        constrain: bool = False,
         cond_fn: Callable = None,
     ):
         """
@@ -63,18 +64,28 @@ class Diffusion:
         alphas = alphas_t / alphas_prev
         betas = 1 - alphas
 
+        def eps_to_prev(eps):
+            return alphas.rsqrt() * (x_t - betas * (1 - alphas_t).rsqrt() * eps)
+
+        def prev_to_eps(prev):
+            return (-prev * alphas.sqrt() + x_t) * (1 - alphas_t).sqrt() / betas
+
         if not sigma_large:
             sigmas = betas * (1 - alphas_prev) / (1 - alphas_t)
         else:
             sigmas = betas
 
-        mean_pred = alphas.rsqrt() * (
-            x_t - betas * (1 - alphas_t).rsqrt() * epsilon_prediction
-        )
         if cond_fn is not None:
+            mean_pred = eps_to_prev(epsilon_prediction)
             mean_pred = mean_pred + sigmas * cond_fn(mean_pred, ts - step)
+            epsilon_prediction = prev_to_eps(mean_pred)
 
-        return mean_pred + sigmas.sqrt() * noise
+        if constrain:
+            x0 = self.eps_to_x0(x_t, ts, epsilon_prediction)
+            x0 = (x0 - x0.mean(dim=-1, keepdim=True)).clamp(-1, 1)
+            epsilon_prediction = self.x0_to_eps(x_t, ts, x0)
+
+        return eps_to_prev(epsilon_prediction) + sigmas.sqrt() * noise
 
     def ddpm_sample(
         self,
@@ -106,10 +117,6 @@ class Diffusion:
 
             with torch.no_grad():
                 eps = predictor(x_t, ts)
-                if constrain:
-                    x0 = self.eps_to_x0(x_t, ts, eps)
-                    x0 = (x0 - x0.mean(dim=-1, keepdim=True)).clamp(-1, 1)
-                    eps = self.x0_to_eps(x_t, ts, x0)
                 x_t = self.ddpm_previous(
                     x_t=x_t,
                     ts=ts,
@@ -117,6 +124,7 @@ class Diffusion:
                     epsilon_prediction=eps,
                     noise=torch.zeros_like(x_T) if i + 1 == steps else None,
                     sigma_large=sigma_large,
+                    constrain=constrain,
                     cond_fn=cond_fn,
                 )
 
