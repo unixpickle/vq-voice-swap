@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Callable, Optional
 
 import torch
 from tqdm.auto import tqdm
@@ -129,6 +129,24 @@ class Diffusion:
                 )
 
         return x_t
+
+    def ddpm_losses(
+        self,
+        x: torch.tensor,
+        predictor: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+        ts: Optional[torch.Tensor] = None,
+        noise: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """
+        Compute the DDPM loss per batch.
+        """
+        if ts is None:
+            ts = torch.rand(len(x), device=x.device)
+        if noise is None:
+            noise = torch.randn_like(x)
+        samples = self.sample_q(x, ts, epsilon=noise)
+        noise_pred = predictor(samples, ts)
+        return ((noise - noise_pred) ** 2).flatten(1).mean(dim=1)
 
 
 def broadcast_as(ts, tensor):

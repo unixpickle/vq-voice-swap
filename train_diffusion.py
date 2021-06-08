@@ -55,10 +55,11 @@ def main():
     for i, data_batch in enumerate(repeat_dataset(data_loader)):
         audio_seq = data_batch["samples"][:, None].to(device)
         ts = torch.rand(args.batch_size, device=device)
-        noise = torch.randn_like(audio_seq)
-        samples = model.diffusion.sample_q(audio_seq, ts, epsilon=noise)
-        noise_pred = model.predictor(samples, ts, use_checkpoint=args.grad_checkpoint)
-        losses = ((noise - noise_pred) ** 2).flatten(1).mean(dim=1)
+        losses = model.diffusion.ddpm_losses(
+            audio_seq,
+            model.predictor.condition(use_checkpoint=args.grad_checkpoint),
+            ts=ts,
+        )
         loss = losses.mean()
 
         opt.zero_grad()
