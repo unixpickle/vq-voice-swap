@@ -14,7 +14,7 @@ from vq_voice_swap.ema import ModelEMA
 from vq_voice_swap.logger import Logger
 from vq_voice_swap.loss_tracker import LossTracker
 from vq_voice_swap.util import count_params, repeat_dataset
-from vq_voice_swap.vq_vae import ConcreteVQVAE
+from vq_voice_swap.vq_vae import VQVAE
 
 
 def main():
@@ -27,13 +27,15 @@ def main():
     if os.path.exists(args.checkpoint_path):
         print("loading from checkpoint...")
         resume = True
-        model = ConcreteVQVAE.load(args.checkpoint_path)
+        model = VQVAE.load(args.checkpoint_path)
         assert model.num_labels == num_labels
     else:
         print("creating new model...")
         resume = False
-        model = ConcreteVQVAE(
-            args.predictor, num_labels, base_channels=args.base_channels
+        model = VQVAE(
+            base_channels=args.base_channels,
+            pred_name=args.predictor,
+            num_labels=num_labels,
         )
 
     if args.pretrained_base:
@@ -47,16 +49,10 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    ema = ModelEMA(
-        model,
-        rates={
-            "": args.ema_rate,
-            "vq.": args.vq_ema_rate,
-        },
-    )
+    ema = ModelEMA(model, rates={"": args.ema_rate, "vq.": args.vq_ema_rate})
 
     opt = AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    trackers = {key: LossTracker(prefix=f"{key}_") for key in ["base", "label", "cond"]}
+    tracker = LossTracker()
     logger = Logger(args.log_file, resume=resume)
 
     for i, data_batch in enumerate(repeat_dataset(data_loader)):
@@ -73,10 +69,8 @@ def main():
         model.vq.revive_dead_entries()
 
         step = i + 1
-        log_dict = {}
-        for key, mses in losses["mses_dict"].items():
-            trackers[key].add(losses["ts"], mses)
-            log_dict.update(trackers[key].log_dict())
+        tracker.add(losses["ts"], losses["mses"])
+        log_dict = tracker.log_dict()
         logger.log(
             step, vq_loss=losses["vq_loss"].item(), mse=losses["mse"].item(), **log_dict
         )
@@ -101,7 +95,7 @@ def arg_parser():
     parser.add_argument("--ema-path", default="model_vqvae_ema.pt", type=str)
     parser.add_argument("--save-interval", default=500, type=int)
     parser.add_argument("--grad-checkpoint", action="store_true")
-    parser.add_argument("--log-file", default="train_log.txt")
+    parser.add_argument("--log-file", default="train_vqvae_log.txt")
     parser.add_argument("data_dir", type=str)
     return parser
 
