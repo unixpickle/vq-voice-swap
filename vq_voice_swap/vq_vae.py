@@ -1,37 +1,32 @@
 from abc import abstractmethod
-from typing import Any, Dict
+from typing import Any, Optional
 
 import torch
-import torch.nn as nn
 
-from .diffusion import Diffusion
-from .models import WaveGradEncoder, make_predictor, predictor_downsample_rate
-from .diffusion import ExpSchedule
-from .util import Savable
+from .diffusion_model import DiffusionModel
+from .models import WaveGradEncoder, predictor_downsample_rate
 from .vq import VQ, VQLoss
 
 
-class VQVAE(nn.Module):
+class VQVAE(DiffusionModel):
     """
-    Abstract base class for a class-conditional waveform VQ-VAE.
+    A waveform VQ-VAE with a diffusion decoder.
     """
 
-    def __init__(
-        self,
-        encoder: nn.Module,
-        vq: VQ,
-        vq_loss: VQLoss,
-        diffusion: Diffusion,
-        num_labels: int,
-    ):
-        super().__init__()
+    def __init__(self, base_channels: int, **kwargs):
+        encoder = WaveGradEncoder(base_channels=base_channels)
+        kwargs["cond_channels"] = encoder.cond_channels
+        super().__init__(base_channels=base_channels, **kwargs)
         self.encoder = encoder
-        self.vq = vq
-        self.vq_loss = vq_loss
-        self.diffusion = diffusion
-        self.num_labels = num_labels
+        self.vq = VQ(self.encoder.cond_channels, 512)
+        self.vq_loss = VQLoss()
 
-    def losses(self, inputs: torch.Tensor, labels: torch.Tensor, **extra_kwargs: Any):
+    def losses(
+        self,
+        inputs: torch.Tensor,
+        labels: Optional[torch.Tensor] = None,
+        **extra_kwargs: Any
+    ):
         """
         Compute losses for training the VQVAE.
 
@@ -39,12 +34,9 @@ class VQVAE(nn.Module):
         :param labels: an [N] Tensor of integer labels.
         :return: a dict containing the following keys:
                  - "vq_loss": loss for the vector quantization layer.
-                 - "mse": mean loss for all the predictors.
+                 - "mse": mean loss for all batch elements.
                  - "ts": a 1-D float tensor of the timesteps per batch entry.
-                 - "mses": a 1-D tensor of the mean MSE losses per batch entry
-                           for all of the predictors.
-                 - "mses_dict": a map of separate 1-D MSE tensors for each
-                                predictor.
+                 - "mses": a 1-D tensor of the mean MSE losses per batch entry.
         """
         encoder_out = self.encoder(inputs, **extra_kwargs)
         vq_out = self.vq(encoder_out)
@@ -53,23 +45,13 @@ class VQVAE(nn.Module):
         ts = torch.rand(inputs.shape[0]).to(inputs)
         epsilon = torch.randn_like(inputs)
         noised_inputs = self.diffusion.sample_q(inputs, ts, epsilon=epsilon)
-        named_preds = self.predictions(
+        predictions = self.predictor(
             noised_inputs, ts, cond=vq_out["passthrough"], labels=labels, **extra_kwargs
         )
-        mses_dict = {
-            name: ((predictions - epsilon) ** 2).flatten(1).mean(1)
-            for name, predictions in named_preds.items()
-        }
-        mses = torch.mean(torch.stack(list(mses_dict.values()), axis=0), axis=0)
+        mses = ((predictions - epsilon) ** 2).flatten(1).mean(1)
         mse = mses.mean()
 
-        return {
-            "vq_loss": vq_loss,
-            "mse": mse,
-            "ts": ts,
-            "mses": mses,
-            "mses_dict": mses_dict,
-        }
+        return {"vq_loss": vq_loss, "mse": mse, "ts": ts, "mses": mses}
 
     def encode(self, inputs: torch.Tensor) -> torch.Tensor:
         """
@@ -84,10 +66,9 @@ class VQVAE(nn.Module):
     def decode(
         self,
         codes: torch.Tensor,
-        labels: torch.Tensor,
+        labels: Optional[torch.Tensor] = None,
         steps: int = 100,
         progress: bool = False,
-        key: str = "cond",
     ) -> torch.Tensor:
         """
         Sample the decoder using encoded audio and corresponding labels.
@@ -105,60 +86,16 @@ class VQVAE(nn.Module):
         ).to(codes.device)
         return self.diffusion.ddpm_sample(
             x_T,
-            lambda xs, ts, **kwargs: self.predictions(
+            lambda xs, ts, **kwargs: self.predictor(
                 xs, ts, cond=cond_seq, labels=labels, **kwargs
-            )["cond"],
+            ),
             steps=steps,
             progress=progress,
         )
 
-    @abstractmethod
-    def predictions(
-        self, xs: torch.Tensor, ts: torch.Tensor, **kwargs
-    ) -> Dict[str, torch.Tensor]:
-        """
-        Get epsilon predictions from one or more predictors.
-
-        Each predictor has a name in the resulting dict.
-        """
-
-    @abstractmethod
     def downsample_rate(self):
         """
         Get the number of audio samples per latent code.
         """
+        return predictor_downsample_rate(self.pred_nae)
 
-
-class ConcreteVQVAE(VQVAE, Savable):
-    def __init__(self, pred_name: str, num_labels: int, base_channels: int = 32):
-        encoder = WaveGradEncoder(base_channels=base_channels)
-        super().__init__(
-            encoder=encoder,
-            vq=VQ(encoder.cond_channels, 512),
-            vq_loss=VQLoss(),
-            diffusion=Diffusion(ExpSchedule()),
-            num_labels=num_labels,
-        )
-        self.pred_name = pred_name
-        self.base_channels = base_channels
-        self.cond_predictor = make_predictor(
-            pred_name,
-            base_channels=base_channels,
-            cond_channels=encoder.cond_channels,
-            num_labels=num_labels,
-        )
-
-    def predictions(
-        self, xs: torch.Tensor, ts: torch.Tensor, **kwargs
-    ) -> Dict[str, torch.Tensor]:
-        return dict(cond=self.cond_predictor(xs, ts, **kwargs))
-
-    def save_kwargs(self) -> Dict[str, Any]:
-        return dict(
-            pred_name=self.pred_name,
-            num_labels=self.num_labels,
-            base_channels=self.base_channels,
-        )
-
-    def downsample_rate(self):
-        return predictor_downsample_rate(self.pred_name)
