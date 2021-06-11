@@ -1,6 +1,8 @@
 from abc import abstractmethod
 from typing import Any, Optional
+from vq_voice_swap.diffusion.diffusion import Diffusion
 
+import numpy as np
 import torch
 
 from .diffusion_model import DiffusionModel
@@ -99,3 +101,18 @@ class VQVAE(DiffusionModel):
         """
         return predictor_downsample_rate(self.pred_nae)
 
+    def load_from_pretrained(self, model: DiffusionModel) -> int:
+        """
+        Load the available parameters from a model into self.
+
+        Some parameters may be absent due to extra conditioning, in which case
+        those parameters are unaffected.
+        """
+        src_params = dict(model.named_parameters())
+        dst_params = dict(self.named_parameters())
+        total = 0
+        for name, dst in dst_params.items():
+            if name in src_params:
+                dst.copy_(src_params[name])
+                total += np.prod(dst.shape)
+        return total

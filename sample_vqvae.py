@@ -7,14 +7,14 @@ import argparse
 import torch
 
 from vq_voice_swap.dataset import ChunkReader, ChunkWriter
-from vq_voice_swap.vq_vae import ConcreteVQVAE
+from vq_voice_swap.vq_vae import VQVAE
 
 
 def main():
     args = arg_parser().parse_args()
 
     print("loading model from checkpoint...")
-    model = ConcreteVQVAE.load(args.checkpoint_path)
+    model = VQVAE.load(args.checkpoint_path)
     assert args.label < model.num_labels
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

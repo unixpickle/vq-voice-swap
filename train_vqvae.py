@@ -10,6 +10,7 @@ import torch
 from torch.optim import AdamW
 
 from vq_voice_swap.dataset import create_data_loader
+from vq_voice_swap.diffusion_model import DiffusionModel
 from vq_voice_swap.ema import ModelEMA
 from vq_voice_swap.logger import Logger
 from vq_voice_swap.loss_tracker import LossTracker
@@ -37,12 +38,11 @@ def main():
             pred_name=args.predictor,
             num_labels=num_labels,
         )
-
-    if args.pretrained_base:
-        print(f"loading and fusing pre-trained base model: {args.pretrained_base}")
-        model.base_predictor.load_state_dict(torch.load(args.pretrained_base))
-        for p in model.base_predictor.parameters():
-            p.requires_grad_(False)
+        if args.pretrained_path:
+            print(f"loading from pretrained model: {args.pretrained_path} ...")
+            dm = DiffusionModel.load(args.pretrained_path)
+            num_params = model.load_from_pretrained(dm)
+            print(f"loaded {num_params} pre-trained parameters...")
 
     print(f"total parameters: {count_params(model)}")
 
@@ -91,7 +91,7 @@ def arg_parser():
     parser.add_argument("--ema-rate", default=0.9999, type=float)
     parser.add_argument("--vq-ema-rate", default=0.99, type=float)
     parser.add_argument("--checkpoint-path", default="model_vqvae.pt", type=str)
-    parser.add_argument("--pretrained-base", default=None, type=str)
+    parser.add_argument("--pretrained-path", default=None, type=str)
     parser.add_argument("--ema-path", default="model_vqvae_ema.pt", type=str)
     parser.add_argument("--save-interval", default=500, type=int)
     parser.add_argument("--grad-checkpoint", action="store_true")
