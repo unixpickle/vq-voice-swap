@@ -1,6 +1,8 @@
 from typing import Any, Dict, Optional
 
+import numpy as np
 import torch
+import torch.nn as nn
 
 from .diffusion import Diffusion, make_schedule
 from .models import Savable, make_predictor
@@ -51,3 +53,20 @@ class DiffusionModel(Savable):
             cond_channels=self.cond_channels,
             dropout=self.dropout,
         )
+
+    def load_from_pretrained(self, model: nn.Module) -> int:
+        """
+        Load the available parameters from a model into self.
+        This only copies the union of self and model.
+
+        :return: the total number of parameters copied. In particular, this is
+                 the sum of the product of the shapes of the parameters.
+        """
+        src_params = dict(model.named_parameters())
+        dst_params = dict(self.named_parameters())
+        total = 0
+        for name, dst in dst_params.items():
+            if name in src_params:
+                dst.copy_(src_params[name])
+                total += np.prod(dst.shape)
+        return total
