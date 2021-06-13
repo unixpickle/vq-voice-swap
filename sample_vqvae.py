@@ -37,7 +37,9 @@ def main():
     sample = sample.clamp(-1, 1).cpu().numpy().flatten()
 
     print(f"saving result to {args.output_file}...")
-    writer = ChunkWriter(args.output_file, sample_rate=args.sample_rate)
+    writer = ChunkWriter(
+        args.output_file, sample_rate=args.sample_rate, encoding=args.encoding
+    )
     try:
         writer.write(sample)
     finally:
@@ -53,6 +55,7 @@ def arg_parser():
     parser.add_argument("--seconds", type=int, default=4)
     parser.add_argument("--label", type=int, default=None, required=True)
     parser.add_argument("--input-file", type=str, default=None, required=True)
+    parser.add_argument("--encoding", type=str, default="linear")
     parser.add_argument("checkpoint_path", type=str)
     parser.add_argument("output_file", type=str)
     return parser

@@ -75,7 +75,7 @@ def generate_one_sample(args, model, device, **kwargs):
         x_T, model.predictor, args.sample_steps, progress=True, **kwargs
     )
 
-    writer = ChunkWriter(args.sample_path, 16000)
+    writer = ChunkWriter(args.sample_path, 16000, encoding=args.encoding)
     writer.write(sample.view(-1).cpu().numpy())
     writer.close()
 
@@ -95,7 +95,7 @@ def generate_many_samples(args, model, device, **kwargs):
             if count == args.num_samples:
                 break
             sample_path = os.path.join(args.sample_path, f"sample_{count:06}.wav")
-            writer = ChunkWriter(sample_path, 16000)
+            writer = ChunkWriter(sample_path, 16000, encoding=args.encoding)
             writer.write(seq.view(-1).cpu().numpy())
             writer.close()
             count += 1
@@ -116,6 +116,7 @@ def arg_parser():
     parser.add_argument("--classifier-scale", default=1.0, type=float)
     parser.add_argument("--classifier-class", default=None, type=int)
     parser.add_argument("--schedule", default="lambda t: t", type=str)
+    parser.add_argument("--encoding", default="linear", type=str)
     return parser
 
 
