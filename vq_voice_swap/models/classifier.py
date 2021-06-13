@@ -5,6 +5,7 @@ Flexible audio sequence classification models.
 import math
 from typing import Any, Dict, Optional
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
@@ -119,12 +120,14 @@ class ClassifierStem(nn.Module):
                 h = block(h, emb)
         return self.out(h)
 
-    def load_from_predictor(self, pred: UNetPredictor):
-        self.in_conv.load_state_dict(pred.in_conv.state_dict())
-        self.time_embed.load_state_dict(pred.time_embed.state_dict())
-        self.time_embed_extra.load_state_dict(pred.time_embed_extra.state_dict())
-        for dst, src in zip(self.blocks, pred.down_blocks):
+    def load_from_predictor(self, pred: UNetPredictor) -> int:
+        dsts = [self.in_conv, self.time_embed, self.time_embed_extra, *self.blocks]
+        srcs = [pred.in_conv, pred.time_embed, pred.time_embed_extra, *pred.down_blocks]
+        total = 0
+        for dst, src in zip(dsts, srcs):
             dst.load_state_dict(src.state_dict())
+            total += sum(np.prod(x.shape) for x in src.state_dict().values())
+        return total
 
 
 class AttentionPool1d(nn.Module):
