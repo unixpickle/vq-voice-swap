@@ -29,6 +29,10 @@ class TrainLoop(ABC):
         if args is None:
             args = self.arg_parser().parse_args()
         self.args = args
+
+        if not os.path.exists(args.output_dir):
+            os.mkdir(args.output_dir)
+
         self.data_loader, self.num_labels = self.create_data_loader()
         self.model, self.resume = self.create_model()
 
@@ -67,19 +71,6 @@ class TrainLoop(ABC):
         self.opt.step()
         self.ema.update()
 
-    def log_losses(
-        self,
-        loss: torch.Tensor,
-        losses: torch.Tensor,
-        ts: torch.Tensor,
-        extra_losses: Dict[str, torch.Tensor],
-    ):
-        self.tracker.add(ts, losses)
-        other = self.tracker.log_dict()
-        for name, loss in extra_losses.items():
-            other[name] = loss.item()
-        self.logger.log(self.loop_steps, loss=loss.item(), **self.tracker.log_dict())
-
     @abstractmethod
     def compute_losses(
         self, data_batch: Dict[str, torch.Tensor]
@@ -90,6 +81,18 @@ class TrainLoop(ABC):
 
         :return: a tuple (losses, ts, other).
         """
+
+    def log_losses(
+        self,
+        loss: torch.Tensor,
+        losses: torch.Tensor,
+        ts: torch.Tensor,
+        extra_losses: Dict[str, torch.Tensor],
+    ):
+        self.tracker.add(ts, losses)
+        other = {k: v.item() for k, v in extra_losses.items()}
+        other.update(self.tracker.log_dict())
+        self.logger.log(self.loop_steps + 1, loss=loss.item(), **other)
 
     def create_data_loader(self) -> Tuple[Iterable, int]:
         return create_data_loader(
@@ -223,6 +226,10 @@ class DiffusionTrainLoop(TrainLoop):
         parser.add_argument("--class-cond", action="store_true")
         return parser
 
+    @classmethod
+    def default_output_dir(cls) -> str:
+        return "ckpt_diffusion"
+
 
 class VQVAETrainLoop(DiffusionTrainLoop):
     def compute_losses(
@@ -244,6 +251,10 @@ class VQVAETrainLoop(DiffusionTrainLoop):
     def step_optimizer(self, loss: torch.Tensor):
         super().step_optimizer(loss)
         self.model.vq.revive_dead_entries()
+
+    @classmethod
+    def default_output_dir(cls) -> str:
+        return "ckpt_vqvae"
 
 
 class ClassifierTrainLoop(TrainLoop):
@@ -291,3 +302,7 @@ class ClassifierTrainLoop(TrainLoop):
         parser.add_argument("--curriculum-start", default=30.0, type=float)
         parser.add_argument("--curriculum-steps", default=0, type=int)
         return parser
+
+    @classmethod
+    def default_output_dir(cls) -> str:
+        return "ckpt_classifier"
