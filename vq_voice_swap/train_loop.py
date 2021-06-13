@@ -136,7 +136,9 @@ class TrainLoop(ABC):
 
     def create_data_loader(self) -> Tuple[Iterable, int]:
         return create_data_loader(
-            directory=self.args.data_dir, batch_size=self.args.batch_size
+            directory=self.args.data_dir,
+            batch_size=self.args.batch_size,
+            encoding=self.args.encoding,
         )
 
     def create_model(self) -> Tuple[Savable, bool]:
@@ -215,6 +217,7 @@ class TrainLoop(ABC):
         parser.add_argument("--pretrained-path", default=None, type=str)
         parser.add_argument("--save-interval", default=1000, type=int)
         parser.add_argument("--grad-checkpoint", action="store_true")
+        parser.add_argument("--encoding", default="linear", type=str)
         parser.add_argument("data_dir", type=str)
         return parser
 

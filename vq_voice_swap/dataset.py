@@ -10,7 +10,7 @@ DURATION_ESTIMATE_SLACK = 0.05
 
 
 def create_data_loader(
-    directory: str, batch_size: int, num_workers=4, **dataset_kwargs
+    directory: str, batch_size: int, encoding="linear", num_workers=4, **dataset_kwargs
 ) -> Tuple[DataLoader, int]:
     """
     Create an audio data loader, either from LibriSpeech or from a small
@@ -23,14 +23,15 @@ def create_data_loader(
     :param directory: the LibriSpeech data directory, or "tones" to use a
                       placeholder dataset.
     :param batch_size: the number of samples per batch.
+    :param encoding: the audio encoding, "linear" or "ulaw".
     :param num_workers: number of parallel data loading threads.
     :return: a pair (loader, num_labels), where loader is the DataLoader and
              num_labels is one greater than the maximum label index.
     """
     if directory == "tones":
-        dataset = ToneDataset()
+        dataset = ToneDataset(encoding=encoding)
     else:
-        dataset = LibriSpeech(directory, **dataset_kwargs)
+        dataset = LibriSpeech(directory, encoding=encoding, **dataset_kwargs)
     return (
         DataLoader(
             dataset,
@@ -47,11 +48,13 @@ class LibriSpeech(Dataset):
     def __init__(
         self,
         directory: str,
+        encoding: str = "linear",
         window_duration: float = 4.0,
         window_spacing: float = 0.2,
         sample_rate: int = 16000,
     ):
         self.directory = directory
+        self.encoding = encoding
         self.window_duration = window_duration
         self.window_spacing = window_spacing
         self.sample_rate = sample_rate
@@ -96,7 +99,7 @@ class LibriSpeech(Dataset):
 
     def __getitem__(self, index) -> Dict[str, Union[int, np.ndarray]]:
         datum = self.data[index]
-        reader = ChunkReader(datum.path, self.sample_rate)
+        reader = ChunkReader(datum.path, self.sample_rate, encoding=self.encoding)
         try:
             reader.read(datum.offset)
             num_samples = int(self.sample_rate * self.window_duration)
@@ -124,7 +127,8 @@ class ToneDataset(Dataset):
     just a phase-shifted sinusoidal wave.
     """
 
-    def __init__(self):
+    def __init__(self, encoding: str = "linear"):
+        self.encoding = encoding
         self.speaker_ids = [300, 500, 1000]
 
     def __len__(self):
@@ -137,9 +141,13 @@ class ToneDataset(Dataset):
 
         data = np.arange(0, 64000, step=1).astype(np.float32) / 16000
         coeffs = (data + phase) * np.pi * 2 * frequency
+
+        samples = np.sin(coeffs)
+        samples = encode_from_linear(samples, self.encoding)
+
         return {
             "label": speaker,
-            "samples": np.sin(coeffs),
+            "samples": samples,
         }
 
 
@@ -166,9 +174,10 @@ class ChunkReader:
     Adapted from https://github.com/unixpickle/udt-voice-swap/blob/9ab0404c3e102ec19709c2d6e9763ae629b4f897/voice_swap/data.py#L63
     """
 
-    def __init__(self, path: str, sample_rate: int):
+    def __init__(self, path: str, sample_rate: int, encoding: str = "linear"):
         self.path = path
         self.sample_rate = sample_rate
+        self.encoding = encoding
         self._done = False
 
         audio_reader, audio_writer = os.pipe()
@@ -213,7 +222,8 @@ class ChunkReader:
         buf = self.read_raw(chunk_size)
         if buf is None:
             return None
-        return np.frombuffer(buf, dtype="int16").astype("float32") / (2 ** 15)
+        linear = np.frombuffer(buf, dtype="int16").astype("float32") / (2 ** 15)
+        return encode_from_linear(linear, self.encoding)
 
     def read_raw(self, chunk_size) -> Optional[bytes]:
         if self._done:
@@ -243,9 +253,10 @@ class ChunkWriter:
     :param sample_rate: the number of samples per second to write.
     """
 
-    def __init__(self, path, sample_rate):
+    def __init__(self, path: str, sample_rate: int, encoding: str = "linear"):
         self.path = path
         self.sample_rate = sample_rate
+        self.encoding = encoding
 
         audio_reader, audio_writer = os.pipe()
         try:
@@ -283,6 +294,7 @@ class ChunkWriter:
                       where each sample is in the range [-1, 1].
         """
         chunk = np.clip(chunk, -1, 1)
+        chunk = decode_to_linear(chunk, self.encoding)
         data = bytes((chunk * (2 ** 15 - 1)).astype("int16"))
         self._writer.write(data)
 
@@ -307,3 +319,29 @@ def lookup_audio_duration(path: str) -> float:
     duration_str = duration_lines[0].split(" ")[1].split(",")[0]
     hours, minutes, seconds = [float(x) for x in duration_str.split(":")]
     return seconds + (minutes + hours * 60) * 60
+
+
+def encode_from_linear(x: np.ndarray, encoding: str) -> np.ndarray:
+    if encoding == "linear":
+        return x
+    elif encoding == "ulaw":
+        return encode_u_law(x)
+    else:
+        raise ValueError(f"unknown audio encoding: {encoding}")
+
+
+def decode_to_linear(x: np.ndarray, encoding: str) -> np.ndarray:
+    if encoding == "linear":
+        return x
+    elif encoding == "ulaw":
+        return decode_u_law(x)
+    else:
+        raise ValueError(f"unknown audio encoding: {encoding}")
+
+
+def encode_u_law(x: np.ndarray, mu: float = 255.0):
+    return np.sign(x) * (np.log(1 + mu * np.abs(x)) / np.log(1 + mu))
+
+
+def decode_u_law(x, mu: float = 255.0):
+    return np.sign(x) * (1 / mu) * ((1 + mu) ** np.abs(x) - 1)
