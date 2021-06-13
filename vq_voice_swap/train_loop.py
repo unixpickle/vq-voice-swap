@@ -238,7 +238,7 @@ class DiffusionTrainLoop(TrainLoop):
             extra_kwargs = dict(labels=data_batch["label"].to(self.device))
         else:
             extra_kwargs = dict()
-        ts = torch.rand(self.args.batch_size, device=self.device)
+        ts = torch.rand(len(audio_seq), device=self.device)
         losses = self.model.diffusion.ddpm_losses(
             audio_seq,
             self.model.predictor.condition(
