@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import argparse
 import os
-from typing import Any, Dict, Iterable, Tuple
+from typing import Any, Dict, Iterable, List, Tuple
 from vq_voice_swap.loss_tracker import LossTracker
 
 import torch
@@ -53,21 +53,61 @@ class TrainLoop(ABC):
             self.step(data_batch)
 
     def step(self, data_batch: Dict[str, torch.Tensor]):
-        losses, ts, extra_losses = self.compute_losses(data_batch)
-        loss = losses.mean()
-        for extra in extra_losses.values():
-            loss = loss + extra
+        self.opt.zero_grad()
 
-        self.step_optimizer(loss)
-        self.log_losses(loss, losses, ts, extra_losses)
+        all_losses = []
+        all_ts = []
+        all_loss = 0.0
+        all_extra = dict()
+
+        for microbatch, weight in self.split_microbatches(data_batch):
+            losses, ts, extra_losses = self.compute_losses(microbatch)
+
+            # Re-weighted losses for microbatch averaging
+            extra_losses = {k: v * weight for k, v in extra_losses.items()}
+            loss = losses.mean() * weight
+            for extra in extra_losses.values():
+                loss = loss + extra
+
+            self.loss_backward(loss)
+
+            # Needed to re-aggregate the microbatch losses for
+            # normal logging.
+            all_losses.append(losses.detach())
+            all_ts.append(ts)
+            all_loss = all_loss + loss.detach()
+            all_extra = {
+                k: v.detach() + all_extra.get(k, 0.0) for k, v in extra_losses.items()
+            }
+
+        self.step_optimizer()
+        self.log_losses(
+            all_loss, torch.cat(all_losses, dim=0), torch.cat(all_ts, dim=0), all_extra
+        )
 
         if (self.total_steps + 1) % self.args.save_interval == 0:
             self.model.save(self.checkpoint_path())
             self.ema.model.save(self.ema_path())
 
-    def step_optimizer(self, loss: torch.Tensor):
-        self.opt.zero_grad()
+    def split_microbatches(
+        self, data_batch: Dict[str, torch.Tensor]
+    ) -> List[Tuple[Dict[str, torch.Tensor], float]]:
+        key = next(iter(data_batch.keys()))
+        batch_size = len(data_batch[key])
+        if not self.args.microbatch or self.args.microbatch > batch_size:
+            return [(data_batch, 1.0)]
+        res = []
+        for i in range(0, batch_size, self.args.microbatch):
+            sub_batch = {
+                k: v[i : i + self.args.microbatch] for k, v in data_batch.items()
+            }
+            res.append((sub_batch, len(sub_batch[key]) / batch_size))
+        return res
+
+    def loss_backward(self, loss: torch.Tensor):
         loss.backward()
+
+    def step_optimizer(self):
         self.opt.step()
         self.ema.update()
 
@@ -170,6 +210,7 @@ class TrainLoop(ABC):
         parser.add_argument("--ema-rate", default=0.9999, type=float)
         parser.add_argument("--weight-decay", default=0.0, type=float)
         parser.add_argument("--batch-size", default=8, type=int)
+        parser.add_argument("--microbatch", default=None, type=int)
         parser.add_argument("--output-dir", default=cls.default_output_dir(), type=str)
         parser.add_argument("--pretrained-path", default=None, type=str)
         parser.add_argument("--save-interval", default=1000, type=int)
@@ -248,8 +289,8 @@ class VQVAETrainLoop(DiffusionTrainLoop):
     def model_class(self) -> Any:
         return VQVAE
 
-    def step_optimizer(self, loss: torch.Tensor):
-        super().step_optimizer(loss)
+    def step_optimizer(self):
+        super().step_optimizer()
         self.model.vq.revive_dead_entries()
 
     @classmethod
