@@ -86,8 +86,7 @@ class TrainLoop(ABC):
         )
 
         if (self.total_steps + 1) % self.args.save_interval == 0:
-            self.model.save(self.checkpoint_path())
-            self.ema.model.save(self.ema_path())
+            self.save()
 
     def split_microbatches(
         self, data_batch: Dict[str, torch.Tensor]
@@ -133,6 +132,11 @@ class TrainLoop(ABC):
         other = {k: v.item() for k, v in extra_losses.items()}
         other.update(self.tracker.log_dict())
         self.logger.log(self.loop_steps + 1, loss=loss.item(), **other)
+
+    def save(self):
+        self.model.save(self.checkpoint_path())
+        self.ema.model.save(self.ema_path())
+        self.logger.mark_save()
 
     def create_data_loader(self) -> Tuple[Iterable, int]:
         return create_data_loader(
