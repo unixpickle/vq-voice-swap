@@ -1,6 +1,9 @@
 from abc import ABC, abstractmethod
 import argparse
+import json
 import os
+import sys
+import time
 from typing import Any, Dict, Iterable, List, Tuple
 from vq_voice_swap.loss_tracker import LossTracker
 
@@ -45,6 +48,8 @@ class TrainLoop(ABC):
 
         self.total_steps = self.logger.start_step
         self.loop_steps = 0
+
+        self.write_run_info()
 
     def loop(self):
         for i, data_batch in enumerate(repeat_dataset(self.data_loader)):
@@ -203,6 +208,18 @@ class TrainLoop(ABC):
     def load_from_pretrained(self, model: Savable) -> int:
         pt = self.model_class().load(self.args.pretrained_path)
         return model.load_from_pretrained(pt)
+
+    def write_run_info(self):
+        filename = f"run_info_{int(time.time())}.json"
+        with open(os.path.join(self.args.output_dir, filename), "w+") as f:
+            json.dump(self.run_info(), f, indent=4)
+
+    def run_info(self) -> Dict:
+        return dict(
+            args=self.args.__dict__,
+            command=sys.argv[0],
+            start_steps=self.total_steps,
+        )
 
     @classmethod
     def arg_parser(cls) -> argparse.ArgumentParser:
