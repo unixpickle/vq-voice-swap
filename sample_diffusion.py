@@ -3,6 +3,7 @@ Train an unconditional diffusion model on waveforms.
 """
 
 import argparse
+from functools import partial
 import math
 import os
 
@@ -30,20 +31,14 @@ def main():
         classifier = Classifier.load(args.classifier_path).to(device)
         classifier.eval()
 
-        def cond_fn(x, ts):
-            if args.classifier_class is not None:
-                target_class = (
-                    torch.tensor([args.classifier_class] * len(x)).long().to(device)
-                )
-            else:
-                target_class = torch.randint_like(ts, high=classifier.num_labels).long()
+        def cond_fn(x, ts, labels=None):
+            if labels is None:
+                labels = sample_labels(args, classifier.num_labels, len(ts), ts.device)
             with torch.enable_grad():
                 x = x.detach().clone().requires_grad_()
                 logits = classifier(x, ts, use_checkpoint=args.grad_checkpoint)
                 logprobs = F.log_softmax(logits, dim=-1)
-                grads = torch.autograd.grad(
-                    logprobs[range(len(x)), target_class].sum(), x
-                )[0]
+                grads = torch.autograd.grad(logprobs[range(len(x)), labels].sum(), x)[0]
                 return grads.detach() * args.classifier_scale
 
     else:
@@ -69,10 +64,11 @@ def main():
         )
 
 
-def generate_one_sample(args, model, device, **kwargs):
+def generate_one_sample(args, model, device, cond_fn=None, **kwargs):
     x_T = torch.randn(1, 1, 64000, device=device)
+    cond_pred, cond_fn = condition_on_sampled_labels(args, model, cond_fn, 1, device)
     sample = model.diffusion.ddpm_sample(
-        x_T, model.predictor, args.sample_steps, progress=True, **kwargs
+        x_T, cond_pred, args.sample_steps, progress=True, cond_fn=cond_fn, **kwargs
     )
 
     writer = ChunkWriter(args.sample_path, 16000, encoding=args.encoding)
@@ -80,7 +76,7 @@ def generate_one_sample(args, model, device, **kwargs):
     writer.close()
 
 
-def generate_many_samples(args, model, device, **kwargs):
+def generate_many_samples(args, model, device, cond_fn=None, **kwargs):
     os.mkdir(args.sample_path)
 
     num_batches = int(math.ceil(args.num_samples / args.batch_size))
@@ -88,8 +84,16 @@ def generate_many_samples(args, model, device, **kwargs):
 
     for _ in tqdm(range(num_batches)):
         x_T = torch.randn(args.batch_size, 1, 64000, device=device)
+        cond_pred, cond_fn_1 = condition_on_sampled_labels(
+            args, model, cond_fn, args.batch_size, device
+        )
         sample = model.diffusion.ddpm_sample(
-            x_T, model.predictor, args.sample_steps, progress=False, **kwargs
+            x_T,
+            cond_pred,
+            args.sample_steps,
+            progress=False,
+            cond_fn=cond_fn_1,
+            **kwargs,
         )
         for seq in sample:
             if count == args.num_samples:
@@ -99,6 +103,22 @@ def generate_many_samples(args, model, device, **kwargs):
             writer.write(seq.view(-1).cpu().numpy())
             writer.close()
             count += 1
+
+
+def condition_on_sampled_labels(args, model, cond_fn, batch_size, device):
+    if model.num_labels is None:
+        return model.predictor, cond_fn
+    labels = sample_labels(args, model.num_labels, batch_size, device)
+    if cond_fn is not None:
+        cond_fn = partial(cond_fn, labels=labels)
+    return partial(model.predictor, labels=labels), cond_fn
+
+
+def sample_labels(args, num_labels, batch_size, device):
+    if args.target_class is not None:
+        return torch.tensor([args.target_class] * batch_size).long().to(device)
+    else:
+        return torch.randint(low=0, high=num_labels, size=batch_size).long()
 
 
 def arg_parser():
@@ -114,7 +134,7 @@ def arg_parser():
     parser.add_argument("--grad-checkpoint", action="store_true")
     parser.add_argument("--classifier-path", default=None, type=str)
     parser.add_argument("--classifier-scale", default=1.0, type=float)
-    parser.add_argument("--classifier-class", default=None, type=int)
+    parser.add_argument("--target-class", default=None, type=int)
     parser.add_argument("--schedule", default="lambda t: t", type=str)
     parser.add_argument("--encoding", default="linear", type=str)
     return parser
