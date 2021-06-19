@@ -116,9 +116,10 @@ def condition_on_sampled_labels(args, model, cond_fn, batch_size, device):
 
 def sample_labels(args, num_labels, batch_size, device):
     if args.target_class is not None:
-        return torch.tensor([args.target_class] * batch_size).long().to(device)
+        out = torch.tensor([args.target_class] * batch_size)
     else:
-        return torch.randint(low=0, high=num_labels, size=batch_size).long()
+        out = torch.randint(low=0, high=num_labels, size=(batch_size,))
+    return out.to(dtype=torch.long, device=device)
 
 
 def arg_parser():
