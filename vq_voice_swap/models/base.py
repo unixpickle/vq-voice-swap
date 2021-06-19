@@ -76,7 +76,8 @@ class Savable(nn.Module):
         total = 0
         for name, dst in dst_params.items():
             if name in src_params:
-                dst.copy_(src_params[name])
+                with torch.no_grad():
+                    dst.copy_(src_params[name])
                 total += np.prod(dst.shape)
         return total
 
