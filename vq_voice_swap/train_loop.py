@@ -141,6 +141,7 @@ class TrainLoop(ABC):
     def save(self):
         self.model.save(self.checkpoint_path())
         self.ema.model.save(self.ema_path())
+        torch.save(self.opt.state_dict(), self.opt_path())
         self.logger.mark_save()
 
     def create_data_loader(self) -> Tuple[Iterable, int]:
@@ -175,11 +176,15 @@ class TrainLoop(ABC):
         return ema
 
     def create_opt(self) -> torch.optim.Optimizer:
-        return AdamW(
+        opt = AdamW(
             self.model.parameters(),
             lr=self.args.lr,
             weight_decay=self.args.weight_decay,
         )
+        if os.path.exists(self.opt_path()):
+            print("loading optimizer from checkpoint...")
+            opt.load_state_dict(torch.load(self.opt_path(), map_location="cpu"))
+        return opt
 
     def create_logger_tracker(self) -> Tuple[Logger, LossTracker]:
         return Logger(self.log_path(), resume=self.resume), LossTracker()
@@ -189,6 +194,9 @@ class TrainLoop(ABC):
 
     def ema_path(self):
         return os.path.join(self.args.output_dir, "model_ema.pt")
+
+    def opt_path(self):
+        return os.path.join(self.args.output_dir, "opt.pt")
 
     def log_path(self):
         return os.path.join(self.args.output_dir, "train_log.txt")
