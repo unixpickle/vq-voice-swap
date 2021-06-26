@@ -74,6 +74,7 @@ class VQVAE(DiffusionModel):
         labels: Optional[torch.Tensor] = None,
         steps: int = 100,
         progress: bool = False,
+        constrain: bool = False,
     ) -> torch.Tensor:
         """
         Sample the decoder using encoded audio and corresponding labels.
@@ -96,6 +97,7 @@ class VQVAE(DiffusionModel):
             ),
             steps=steps,
             progress=progress,
+            constrain=constrain,
         )
 
     @property

@@ -33,7 +33,9 @@ def main():
 
     print("decoding audio samples...")
     labels = torch.tensor([args.label]).long().to(device)
-    sample = model.decode(encoded, labels, steps=args.sample_steps, progress=True)
+    sample = model.decode(
+        encoded, labels, steps=args.sample_steps, progress=True, constrain=True
+    )
     sample = sample.clamp(-1, 1).cpu().numpy().flatten()
 
     print(f"saving result to {args.output_file}...")
