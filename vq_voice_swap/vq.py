@@ -5,6 +5,7 @@ Code adapted from: https://github.com/unixpickle/vq-vae-2/blob/6874db74dbc8e7a24
 """
 
 import random
+from typing import Callable, Dict, Tuple
 
 import numpy as np
 import torch
@@ -17,7 +18,7 @@ class VQLoss(nn.Module):
     A special loss function for training a VQ layer.
     """
 
-    def __init__(self, commitment=0.25):
+    def __init__(self, commitment: float = 0.25):
         super().__init__()
         self.commitment = commitment
 
@@ -58,7 +59,7 @@ class VQ(nn.Module):
         self.register_buffer("usage_count", dead_rate * torch.ones(num_codes).long())
         self._last_batch = None  # used for revival
 
-    def embed(self, idxs: torch.Tensor):
+    def embed(self, idxs: torch.Tensor) -> torch.Tensor:
         """
         Convert encoded indices into embeddings.
 
@@ -72,7 +73,7 @@ class VQ(nn.Module):
         embedded = embedded.permute(0, 2, 1).reshape(new_shape)
         return embedded
 
-    def forward(self, inputs):
+    def forward(self, inputs: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
         Apply vector quantization.
 
@@ -146,7 +147,7 @@ class VQ(nn.Module):
         self.usage_count.clamp_(0, self.dead_rate)
 
 
-def embedding_distances(dictionary: torch.Tensor, tensor: torch.Tensor):
+def embedding_distances(dictionary: torch.Tensor, tensor: torch.Tensor) -> torch.Tensor:
     """
     Compute distances between every embedding in a
     dictionary and every vector in a Tensor.
@@ -171,7 +172,9 @@ def embedding_distances(dictionary: torch.Tensor, tensor: torch.Tensor):
     return -2 * dots + dict_norms + tensor_norms[..., None]
 
 
-def flatten_channels(x: torch.Tensor):
+def flatten_channels(
+    x: torch.Tensor,
+) -> Tuple[torch.Tensor, Callable[[torch.Tensor], torch.Tensor]]:
     """
     Turn an [N x C x ...] Tensor into a [B x C] Tensor.
 

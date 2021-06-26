@@ -1,10 +1,10 @@
-from typing import TextIO, Union
+from typing import Any, Dict, Iterator, TextIO, Tuple, Union
 
 # The log line indicating that a checkpoint was saved.
 SAVED_MSG = "# saved\n"
 
 
-def read_log(log_reader: Union[str, TextIO]):
+def read_log(log_reader: Union[str, TextIO]) -> Iterator[Tuple[int, Dict[str, Any]]]:
     """
     Read entries in a log file as dicts.
 

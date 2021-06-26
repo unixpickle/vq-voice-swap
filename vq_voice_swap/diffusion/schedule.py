@@ -18,7 +18,7 @@ class ExpSchedule(Schedule):
     using betas linearly interpolated from a tiny value to a larger value.
     """
 
-    def __init__(self, alpha_final=1e-5):
+    def __init__(self, alpha_final: float = 1e-5):
         super().__init__()
         self.alpha_final = alpha_final
 

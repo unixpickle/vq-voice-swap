@@ -16,7 +16,7 @@ class Diffusion:
 
     def sample_q(
         self, x_0: torch.Tensor, ts: torch.Tensor, epsilon: torch.Tensor = None
-    ):
+    ) -> torch.Tensor:
         """
         Sample from q(x_t | x_0) for a batch of x_0.
         """
@@ -27,7 +27,7 @@ class Diffusion:
 
     def eps_to_x0(
         self, x_t: torch.Tensor, ts: torch.Tensor, epsilon_prediction: torch.Tensor
-    ):
+    ) -> torch.Tensor:
         """
         Evaluate the mean of p(x_0 | x_t), provided the model's epsilon
         prediction for x_t.
@@ -35,7 +35,9 @@ class Diffusion:
         alphas = broadcast_as(self.schedule(ts), x_t)
         return (x_t - (1 - alphas).sqrt() * epsilon_prediction) * alphas.rsqrt()
 
-    def x0_to_eps(self, x_t: torch.Tensor, ts: torch.Tensor, x_0: torch.Tensor):
+    def x0_to_eps(
+        self, x_t: torch.Tensor, ts: torch.Tensor, x_0: torch.Tensor
+    ) -> torch.Tensor:
         """
         Compute the inverse of eps_to_x0() with respect to epsilon, computing
         the epsilon which would have given an x_0 prediction.
@@ -53,7 +55,7 @@ class Diffusion:
         sigma_large: bool = False,
         constrain: bool = False,
         cond_fn: Callable = None,
-    ):
+    ) -> torch.Tensor:
         """
         Sample the previous timestep using reverse diffusion.
         """
@@ -97,7 +99,7 @@ class Diffusion:
         constrain: bool = False,
         cond_fn: Callable = None,
         schedule: Callable = None,
-    ):
+    ) -> torch.Tensor:
         """
         Sample x_0 from x_t using reverse diffusion.
         """
@@ -149,7 +151,7 @@ class Diffusion:
         return ((noise - noise_pred) ** 2).flatten(1).mean(dim=1)
 
 
-def broadcast_as(ts, tensor):
+def broadcast_as(ts: torch.Tensor, tensor: torch.Tensor) -> torch.Tensor:
     while len(ts.shape) < len(tensor.shape):
         ts = ts[:, None]
     return ts.to(tensor) + torch.zeros_like(tensor)

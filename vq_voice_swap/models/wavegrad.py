@@ -85,7 +85,7 @@ class WaveGradPredictor(Predictor):
         cond: Optional[torch.Tensor] = None,
         labels: Optional[torch.Tensor] = None,
         use_checkpoint=False,
-    ):
+    ) -> torch.Tensor:
         assert x.shape[2] % 64 == 0, "timesteps must be divisible by 64"
 
         # Model doesn't need to be conditional
@@ -136,7 +136,7 @@ class WaveGradEncoder(nn.Module):
             DBlock(base_channels * 16, self.cond_channels, 2, extra_blocks=1),
         )
 
-    def forward(self, x, use_checkpoint=False):
+    def forward(self, x: torch.Tensor, use_checkpoint: bool = False) -> torch.Tensor:
         if use_checkpoint:
             if not x.requires_grad:
                 x = x.clone().requires_grad_()
@@ -199,7 +199,7 @@ class UBlock(nn.Module):
         z: torch.Tensor,
         t: torch.Tensor,
         labels: Optional[torch.Tensor] = None,
-    ):
+    ) -> torch.Tensor:
         res_out = self.res_transform(h)
         output = self.block_1(h)
         output = self.block_2(self.film_1(output, z, t, labels=labels))
@@ -251,7 +251,7 @@ class DBlock(nn.Module):
             ]
         )
 
-    def forward(self, h: torch.Tensor):
+    def forward(self, h: torch.Tensor) -> torch.Tensor:
         res = self.block_1(h) + self.res_transform(h)
         for block in self.extra:
             res = res + block(res)
@@ -304,7 +304,7 @@ class FILM(nn.Module):
         cond: torch.Tensor,
         t: torch.Tensor,
         labels: Optional[torch.Tensor] = None,
-    ):
+    ) -> torch.Tensor:
         embedding = self.time_emb(t)
         assert (labels is None) == (self.label_emb is None)
         if labels is not None:
@@ -324,7 +324,7 @@ class TimeEmbedding(nn.Module):
         self.channels = channels
         self.proj = nn.Linear(channels, channels)
 
-    def forward(self, t: torch.Tensor):
+    def forward(self, t: torch.Tensor) -> torch.Tensor:
         half = self.channels // 2
         min_coeff = 0.1
         max_coeff = 100.0

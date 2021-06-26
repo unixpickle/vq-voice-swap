@@ -49,14 +49,14 @@ class Savable(nn.Module):
         obj.load_state_dict(state["state_dict"])
         return obj
 
-    def save(self, path):
+    def save(self, path: str):
         """
         Save this model to a file for loading with load().
         """
         atomic_save(self.save_dict(), path)
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path: str):
         """
         Load a fresh model instance from a file created with save().
         """

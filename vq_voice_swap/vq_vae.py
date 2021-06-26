@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 import torch
 
@@ -25,7 +25,7 @@ class VQVAE(DiffusionModel):
         inputs: torch.Tensor,
         labels: Optional[torch.Tensor] = None,
         **extra_kwargs: Any
-    ):
+    ) -> Dict[str, torch.Tensor]:
         """
         Compute losses for training the VQVAE.
 
@@ -92,7 +92,7 @@ class VQVAE(DiffusionModel):
             progress=progress,
         )
 
-    def downsample_rate(self):
+    def downsample_rate(self) -> int:
         """
         Get the number of audio samples per latent code.
         """

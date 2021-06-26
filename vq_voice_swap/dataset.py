@@ -286,7 +286,7 @@ class ChunkWriter:
 
         self._writer = os.fdopen(self._audio_writer, "wb", buffering=1024)
 
-    def write(self, chunk):
+    def write(self, chunk: np.ndarray):
         """
         Read a chunk of audio samples from the file.
 
@@ -339,9 +339,9 @@ def decode_to_linear(x: np.ndarray, encoding: str) -> np.ndarray:
         raise ValueError(f"unknown audio encoding: {encoding}")
 
 
-def encode_u_law(x: np.ndarray, mu: float = 255.0):
+def encode_u_law(x: np.ndarray, mu: float = 255.0) -> np.ndarray:
     return np.sign(x) * (np.log(1 + mu * np.abs(x)) / np.log(1 + mu))
 
 
-def decode_u_law(x, mu: float = 255.0):
+def decode_u_law(x, mu: float = 255.0) -> np.ndarray:
     return np.sign(x) * (1 / mu) * ((1 + mu) ** np.abs(x) - 1)
