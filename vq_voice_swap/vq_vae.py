@@ -87,7 +87,7 @@ class VQVAE(DiffusionModel):
         """
         cond_seq = self.vq.embed(codes)
         x_T = torch.randn(
-            codes.shape[0], 1, codes.shape[1] * self.downsample_rate()
+            codes.shape[0], 1, codes.shape[1] * self.encoder.downsample_rate
         ).to(codes.device)
         return self.diffusion.ddpm_sample(
             x_T,
