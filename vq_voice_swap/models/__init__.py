@@ -1,7 +1,7 @@
 from .base import Predictor, Savable, atomic_save
 from .classifier import Classifier, ClassifierStem
-from .make import make_predictor, predictor_downsample_rate
-from .unet import UNetPredictor
+from .make import make_encoder, make_predictor
+from .unet import UNetPredictor, UNetEncoder
 from .wavegrad import WaveGradEncoder, WaveGradPredictor
 
 
@@ -11,8 +11,9 @@ __all__ = [
     "atomic_save",
     "Classifier",
     "ClassifierStem",
+    "make_encoder",
     "make_predictor",
-    "predictor_downsample_rate",
+    "UNetEncoder",
     "UNetPredictor",
     "WaveGradEncoder",
     "WaveGradPredictor",

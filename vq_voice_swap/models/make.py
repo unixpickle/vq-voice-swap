@@ -1,8 +1,8 @@
 from typing import Optional
 
-from .base import Predictor
-from .unet import UNetPredictor
-from .wavegrad import WaveGradPredictor
+from .base import Encoder, Predictor
+from .unet import UNetEncoder, UNetPredictor
+from .wavegrad import WaveGradEncoder, WaveGradPredictor
 
 
 def make_predictor(
@@ -32,6 +32,24 @@ def make_predictor(
         )
     else:
         raise ValueError(f"unknown predictor: {pred_name}")
+
+
+def make_encoder(
+    enc_name: str,
+    base_channels: int = 32,
+    cond_mult: int = 16,
+) -> Encoder:
+    """
+    Create an Encoder model from a human-readable name.
+    """
+    if enc_name == "wavegrad":
+        return WaveGradEncoder(cond_mult=cond_mult, base_channels=base_channels)
+    elif enc_name == "unet":
+        return UNetEncoder(
+            base_channels=base_channels, out_channels=base_channels * cond_mult
+        )
+    else:
+        raise ValueError(f"unknown encoder: {enc_name}")
 
 
 def predictor_downsample_rate(pred_name: str) -> int:

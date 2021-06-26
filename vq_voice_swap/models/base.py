@@ -19,6 +19,30 @@ class Predictor(nn.Module):
     def condition(self, **kwargs) -> Callable:
         return functools.partial(self, **kwargs)
 
+    @property
+    @abstractmethod
+    def downsample_rate(self) -> int:
+        """
+        Get the downsample rate to ensure that input sequences are evenly
+        divisible by it.
+        """
+
+
+class Encoder(nn.Module):
+    @abstractmethod
+    def forward(self, xs: torch.Tensor, **kwargs) -> torch.Tensor:
+        """
+        Apply the encoder to get a lower-resolution tensor.
+        """
+
+    @property
+    @abstractmethod
+    def downsample_rate(self) -> int:
+        """
+        Get the downsample rate to ensure that input sequences are evenly
+        divisible by it.
+        """
+
 
 class Savable(nn.Module):
     """

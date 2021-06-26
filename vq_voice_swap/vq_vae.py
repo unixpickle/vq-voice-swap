@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional
 import torch
 
 from .diffusion_model import DiffusionModel
-from .models import WaveGradEncoder, predictor_downsample_rate
+from .models import make_encoder
 from .vq import VQ, VQLoss
 
 
@@ -12,12 +12,18 @@ class VQVAE(DiffusionModel):
     A waveform VQ-VAE with a diffusion decoder.
     """
 
-    def __init__(self, base_channels: int, **kwargs):
-        encoder = WaveGradEncoder(base_channels=base_channels)
-        kwargs["cond_channels"] = encoder.cond_channels
+    def __init__(
+        self, base_channels: int, enc_name: str = "unet", cond_mult: int = 16, **kwargs
+    ):
+        encoder = make_encoder(
+            enc_name=enc_name, base_channels=base_channels, cond_mult=cond_mult
+        )
+        kwargs["cond_channels"] = base_channels * cond_mult
         super().__init__(base_channels=base_channels, **kwargs)
+        self.enc_name = enc_name
+        self.cond_mult = cond_mult
         self.encoder = encoder
-        self.vq = VQ(self.encoder.cond_channels, 512)
+        self.vq = VQ(self.cond_channels, 512)
         self.vq_loss = VQLoss()
 
     def losses(
@@ -94,6 +100,12 @@ class VQVAE(DiffusionModel):
 
     def downsample_rate(self) -> int:
         """
-        Get the number of audio samples per latent code.
+        Get the minimum divisor required for input sequences.
         """
-        return predictor_downsample_rate(self.pred_name)
+        # Naive lowest common multiple.
+        x, y = self.downsample_rate, self.encoder.downsample_rate
+        return next(i for i in range(x * y) if i % x == 0 and i % y == 0)
+
+    def save_kwargs(self) -> Dict[str, Any]:
+        res = super().save_kwargs()
+        res.update(dict(enc_name=self.enc_name, cond_mult=self.cond_mult))

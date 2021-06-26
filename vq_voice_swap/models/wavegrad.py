@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 from torch.utils.checkpoint import checkpoint, checkpoint_sequential
 
-from .base import Predictor
+from .base import Encoder, Predictor
 
 
 class WaveGradPredictor(Predictor):
@@ -117,8 +117,12 @@ class WaveGradPredictor(Predictor):
         out = self.u_conv_2(out)
         return out
 
+    @property
+    def downsample_rate(self) -> int:
+        return 64
 
-class WaveGradEncoder(nn.Module):
+
+class WaveGradEncoder(Encoder):
     """
     An encoder-only version of WaveGradPredictor that can be used to downsample
     waveforms.
@@ -143,6 +147,10 @@ class WaveGradEncoder(nn.Module):
             return checkpoint_sequential(self.d_blocks, len(self.d_blocks), x)
         else:
             return self.d_blocks(x)
+
+    @property
+    def downsample_rate(self) -> int:
+        return 64
 
 
 class UBlock(nn.Module):

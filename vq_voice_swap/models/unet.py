@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
-from .base import Predictor
+from .base import Encoder, Predictor
 from .wavegrad import TimeEmbedding
 
 
@@ -162,12 +162,78 @@ class UNetPredictor(Predictor):
         h = self.out(h)
         return h
 
+    @property
+    def downsample_rate(self) -> int:
+        return 2 ** (len(self.channel_mult) - 1)
+
+
+class UNetEncoder(Encoder):
+    def __init__(
+        self,
+        base_channels: int,
+        channel_mult: Tuple[int] = (1, 1, 2, 2, 2, 4, 4, 8, 8),
+        depth_mult: int = 2,
+        in_channels: int = 1,
+        out_channels: int = 512,
+    ):
+        super().__init__()
+        self.base_channels = base_channels
+        self.channel_mult = channel_mult
+        self.depth_mult = depth_mult
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+
+        self.in_conv = nn.Conv1d(in_channels, base_channels, 3, padding=1)
+
+        self.blocks = nn.ModuleList([])
+
+        cur_channels = base_channels
+        for depth, mult in enumerate(channel_mult):
+            for _ in range(depth_mult):
+                self.blocks.append(
+                    ResBlock(
+                        channels=cur_channels,
+                        out_channels=mult * base_channels,
+                    )
+                )
+                cur_channels = mult * base_channels
+            if depth != len(channel_mult) - 1:
+                self.blocks.append(
+                    ResBlock(
+                        channels=cur_channels,
+                        scale_factor=0.5,
+                    ),
+                )
+
+        self.out = nn.Sequential(
+            norm_act(cur_channels),
+            nn.Conv1d(cur_channels, out_channels, 3, padding=1),
+        )
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        use_checkpoint: bool = False,
+    ) -> torch.Tensor:
+        h = self.in_conv(x)
+        for block in self.blocks:
+            if use_checkpoint:
+                h = checkpoint(block, h)
+            else:
+                h = block(h)
+        h = self.out(h)
+        return h
+
+    @property
+    def downsample_rate(self) -> int:
+        return 2 ** (len(self.channel_mult) - 1)
+
 
 class ResBlock(nn.Module):
     def __init__(
         self,
         channels: int,
-        emb_channels: int,
+        emb_channels: Optional[int] = None,
         out_channels: Optional[int] = None,
         scale_factor: float = 1.0,
         dilation: int = 2,
@@ -188,11 +254,13 @@ class ResBlock(nn.Module):
             skip_conv,
         )
 
-        self.cond_layers = nn.Sequential(
-            activation(),
-            # Start with a small amount of conditioning.
-            scale_module(nn.Linear(emb_channels, self.out_channels * 2), s=0.1),
-        )
+        if self.emb_channels:
+            self.cond_layers = nn.Sequential(
+                activation(),
+                # Start with a small amount of conditioning.
+                scale_module(nn.Linear(emb_channels, self.out_channels * 2), s=0.1),
+            )
+
         self.pre_cond = nn.Sequential(
             norm_act(channels),
             Resize(scale_factor),
@@ -220,11 +288,14 @@ class ResBlock(nn.Module):
                 out_conv,
             )
 
-    def forward(self, x: torch.Tensor, cond: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, cond: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         h = self.pre_cond(x)
-        cond_ab = self.cond_layers(cond)[..., None]
-        cond_a, cond_b = torch.split(cond_ab, self.out_channels, dim=1)
-        h = h * (cond_a + 1) + cond_b
+        if self.emb_channels:
+            cond_ab = self.cond_layers(cond)[..., None]
+            cond_a, cond_b = torch.split(cond_ab, self.out_channels, dim=1)
+            h = h * (cond_a + 1) + cond_b
         h = self.post_cond(h)
         return self.skip(x) + h
 
