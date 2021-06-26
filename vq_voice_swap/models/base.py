@@ -77,6 +77,11 @@ class Savable(nn.Module):
         for name, dst in dst_params.items():
             if name in src_params:
                 with torch.no_grad():
+                    if dst.shape != src_params[name].shape:
+                        raise RuntimeError(
+                            f"Parameter {name} has shape {dst.shape} in destination "
+                            f"but {src_params[name].shape} in source."
+                        )
                     dst.copy_(src_params[name])
                 total += np.prod(dst.shape)
         return total

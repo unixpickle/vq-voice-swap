@@ -321,6 +321,17 @@ class VQVAETrainLoop(DiffusionTrainLoop):
     def model_class(self) -> Any:
         return VQVAE
 
+    def load_from_pretrained(self, model: Savable) -> int:
+        pt, err = None, None
+        for cls in [self.model_class(), DiffusionModel]:
+            try:
+                pt = cls.load(self.args.pretrained_path)
+            except RuntimeError as exc:
+                err = exc
+        if pt is None:
+            raise err
+        return model.load_from_pretrained(pt)
+
     def step_optimizer(self):
         super().step_optimizer()
         self.model.vq.revive_dead_entries()
