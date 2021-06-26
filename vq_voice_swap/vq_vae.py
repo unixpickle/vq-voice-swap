@@ -96,4 +96,4 @@ class VQVAE(DiffusionModel):
         """
         Get the number of audio samples per latent code.
         """
-        return predictor_downsample_rate(self.pred_nae)
+        return predictor_downsample_rate(self.pred_name)
