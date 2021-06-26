@@ -109,3 +109,4 @@ class VQVAE(DiffusionModel):
     def save_kwargs(self) -> Dict[str, Any]:
         res = super().save_kwargs()
         res.update(dict(enc_name=self.enc_name, cond_mult=self.cond_mult))
+        return res
