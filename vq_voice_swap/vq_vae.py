@@ -98,12 +98,13 @@ class VQVAE(DiffusionModel):
             progress=progress,
         )
 
+    @property
     def downsample_rate(self) -> int:
         """
         Get the minimum divisor required for input sequences.
         """
         # Naive lowest common multiple.
-        x, y = self.downsample_rate, self.encoder.downsample_rate
+        x, y = super().downsample_rate, self.encoder.downsample_rate
         return next(i for i in range(x * y) if i % x == 0 and i % y == 0)
 
     def save_kwargs(self) -> Dict[str, Any]:
