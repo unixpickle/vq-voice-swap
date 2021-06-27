@@ -48,18 +48,12 @@ def make_encoder(
         return UNetEncoder(
             base_channels=base_channels, out_channels=base_channels * cond_mult
         )
+    elif enc_name == "unet128":
+        # Like unet, but with downsample rate 128 rather than 256.
+        return UNetEncoder(
+            base_channels=base_channels,
+            channel_mult=(1, 1, 2, 2, 2, 4, 4, 8),
+            out_channels=base_channels * cond_mult,
+        )
     else:
         raise ValueError(f"unknown encoder: {enc_name}")
-
-
-def predictor_downsample_rate(pred_name: str) -> int:
-    """
-    Get the downsample rate of a named Predictor, to ensure that input
-    sequences are evenly divisible by it.
-    """
-    if pred_name == "wavegrad":
-        return 2 ** 6
-    elif pred_name == "unet":
-        return 2 ** 8
-    else:
-        raise ValueError(f"unknown predictor: {pred_name}")
