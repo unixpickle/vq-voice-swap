@@ -21,7 +21,9 @@ def main():
     model.to(device)
 
     print(f"loading waveform from {args.input_file}...")
-    reader = ChunkReader(args.input_file, sample_rate=args.sample_rate)
+    reader = ChunkReader(
+        args.input_file, sample_rate=args.sample_rate, encoding=args.encoding
+    )
     try:
         chunk = reader.read(args.seconds * args.sample_rate)
     finally:
