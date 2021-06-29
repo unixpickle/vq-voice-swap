@@ -10,7 +10,7 @@ import argparse
 import torch
 from tqdm.auto import tqdm
 
-from vq_voice_swap.dataset import ChunkReader, ChunkWriter
+from vq_voice_swap.dataset import ChunkReader
 from vq_voice_swap.vq_vae import VQVAE
 
 
@@ -48,7 +48,9 @@ def main():
         0.0, 1.0, steps=args.num_timesteps, dtype=torch.float32, device=device
     ).repeat(model.num_labels)
     losses = (
-        evaluate_losses(model, in_seq, labels, ts, encoded, args.batch_size)
+        evaluate_losses(
+            model, in_seq, labels, ts, encoded, args.batch_size, args.num_seeds
+        )
         .reshape([-1, args.num_timesteps])
         .mean(-1)
         .cpu()
@@ -70,26 +72,33 @@ def evaluate_losses(
     ts: torch.Tensor,
     encoded: torch.Tensor,
     batch_size: int,
+    num_seeds: int,
 ):
     results = []
 
     # Fix a noise seed for every example to reduce variance
-    epsilon = torch.randn_like(targets)
+    epsilons = torch.randn_like(targets[None].repeat(num_seeds, 1, 1, 1))
 
     for i in tqdm(range(0, len(labels), batch_size)):
         labels_mb = labels[i : i + batch_size]
         ts_mb = ts[i : i + batch_size]
         encoded_mb = encoded.repeat(len(ts_mb), 1, 1)
         targets_mb = targets.repeat(len(ts_mb), 1, 1)
-        epsilon_mb = epsilon.repeat(len(ts_mb), 1, 1)
 
-        noised_inputs = model.diffusion.sample_q(targets_mb, ts_mb, epsilon=epsilon_mb)
-        with torch.no_grad():
-            predictions = model.predictor(
-                noised_inputs, ts_mb, cond=encoded_mb, labels=labels_mb
+        sub_results = []
+        for epsilon in epsilons:
+            epsilon_mb = epsilon.repeat(len(ts_mb), 1, 1)
+            noised_inputs = model.diffusion.sample_q(
+                targets_mb, ts_mb, epsilon=epsilon_mb
             )
-            mses = ((predictions - epsilon) ** 2).flatten(1).mean(1)
-            results.append(mses)
+            with torch.no_grad():
+                predictions = model.predictor(
+                    noised_inputs, ts_mb, cond=encoded_mb, labels=labels_mb
+                )
+                mses = ((predictions - epsilon_mb) ** 2).flatten(1).mean(1)
+                sub_results.append(mses)
+
+        results.append(torch.stack(sub_results).mean(0))
 
     return torch.cat(results)
 
@@ -102,6 +111,7 @@ def arg_parser():
     parser.add_argument("--seconds", type=int, default=4)
     parser.add_argument("--encoding", type=str, default="linear")
     parser.add_argument("--num-timesteps", type=int, default=16)
+    parser.add_argument("--num-seeds", type=int, default=1)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--top-k", type=int, default=20)
     parser.add_argument("--input-file", type=str, default=None, required=True)
