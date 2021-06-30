@@ -172,6 +172,7 @@ class UNetEncoder(Encoder):
         self,
         base_channels: int,
         channel_mult: Tuple[int] = (1, 1, 2, 2, 2, 4, 4, 8, 8),
+        out_dilations: Tuple[int] = (),
         depth_mult: int = 2,
         in_channels: int = 1,
         out_channels: int = 512,
@@ -198,12 +199,10 @@ class UNetEncoder(Encoder):
                 )
                 cur_channels = mult * base_channels
             if depth != len(channel_mult) - 1:
-                self.blocks.append(
-                    ResBlock(
-                        channels=cur_channels,
-                        scale_factor=0.5,
-                    ),
-                )
+                self.blocks.append(ResBlock(channels=cur_channels, scale_factor=0.5))
+
+        for d in out_dilations:
+            self.blocks.append(ResBlock(channels=cur_channels, dilation=d))
 
         self.out = nn.Sequential(
             norm_act(cur_channels),

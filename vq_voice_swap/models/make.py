@@ -55,5 +55,12 @@ def make_encoder(
             channel_mult=(1, 1, 2, 2, 2, 4, 4, 8),
             out_channels=base_channels * cond_mult,
         )
+    elif enc_name == "unet128-dilated":
+        return UNetEncoder(
+            base_channels=base_channels,
+            channel_mult=(1, 1, 2, 2, 2, 4, 4, 8),
+            out_dilations=(4, 8, 16, 32),
+            out_channels=base_channels * cond_mult,
+        )
     else:
         raise ValueError(f"unknown encoder: {enc_name}")
