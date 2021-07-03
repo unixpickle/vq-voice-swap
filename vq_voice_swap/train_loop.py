@@ -43,7 +43,7 @@ class TrainLoop(ABC):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)
 
-        self.ema = self.create_ema()
+        self.emas = self.create_emas()
         self.opt = self.create_opt()
         self.logger, self.tracker = self.create_logger_tracker()
 
@@ -114,7 +114,8 @@ class TrainLoop(ABC):
 
     def step_optimizer(self):
         self.opt.step()
-        self.ema.update()
+        for ema in self.emas.values():
+            ema.update()
 
     @abstractmethod
     def compute_losses(
@@ -141,7 +142,8 @@ class TrainLoop(ABC):
 
     def save(self):
         self.model.save(self.checkpoint_path())
-        self.ema.model.save(self.ema_path())
+        for rate, ema in self.emas.items():
+            ema.model.save(self.ema_path(rate))
         torch.save(self.opt.state_dict(), self.opt_path())
         self.logger.mark_save()
 
@@ -169,12 +171,18 @@ class TrainLoop(ABC):
         print(f"total parameters: {count_params(model)}")
         return model, resume
 
-    def create_ema(self) -> ModelEMA:
-        ema = ModelEMA(self.model, rates={"": self.args.ema_rate})
-        if os.path.exists(self.ema_path()):
-            print("loading EMA from checkpoint...")
-            ema.model = self.model_class().load(self.ema_path()).to(self.device)
-        return ema
+    def create_emas(self) -> Dict[float, ModelEMA]:
+        res = {}
+        for rate_str in self.args.ema_rate.split(","):
+            rate = float(rate_str)
+            assert rate not in res, "cannot have duplicate EMA rate"
+            ema = ModelEMA(self.model, rates={"": rate})
+            path = self.ema_path(rate)
+            if os.path.exists(path):
+                print(f"loading EMA {rate} from checkpoint...")
+                ema.model = self.model_class().load(path).to(self.device)
+            res[rate] = ema
+        return res
 
     def create_opt(self) -> torch.optim.Optimizer:
         opt = AdamW(
@@ -193,8 +201,8 @@ class TrainLoop(ABC):
     def checkpoint_path(self):
         return os.path.join(self.args.output_dir, "model.pt")
 
-    def ema_path(self):
-        return os.path.join(self.args.output_dir, "model_ema.pt")
+    def ema_path(self, rate):
+        return os.path.join(self.args.output_dir, f"model_ema_{rate}.pt")
 
     def opt_path(self):
         return os.path.join(self.args.output_dir, "opt.pt")
@@ -239,7 +247,7 @@ class TrainLoop(ABC):
             formatter_class=argparse.ArgumentDefaultsHelpFormatter
         )
         parser.add_argument("--lr", default=1e-4, type=float)
-        parser.add_argument("--ema-rate", default=0.9999, type=float)
+        parser.add_argument("--ema-rate", default="0.9999", type=str)
         parser.add_argument("--weight-decay", default=0.0, type=float)
         parser.add_argument("--batch-size", default=8, type=int)
         parser.add_argument("--microbatch", default=None, type=int)
