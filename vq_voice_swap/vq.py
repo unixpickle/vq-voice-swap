@@ -57,7 +57,7 @@ class ReviveVQLoss(StandardVQLoss):
     slightly towards the mean input to prevent dead centers.
     """
 
-    def __init__(self, revival: float = 0.01, **kwargs):
+    def __init__(self, revival: float, **kwargs):
         super().__init__(**kwargs)
         self.revival = revival
 
