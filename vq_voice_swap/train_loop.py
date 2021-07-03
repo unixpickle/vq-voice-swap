@@ -322,7 +322,7 @@ class VQVAETrainLoop(DiffusionTrainLoop):
         return VQVAE
 
     def create_new_model(self) -> Savable:
-        return self.model_class()(
+        res = self.model_class()(
             pred_name=self.args.predictor,
             base_channels=self.args.base_channels,
             enc_name=self.args.encoder,
@@ -331,12 +331,16 @@ class VQVAETrainLoop(DiffusionTrainLoop):
             dropout=self.args.dropout,
             num_labels=self.num_labels if self.args.class_cond else None,
         )
+        if self.args.freeze_encoder:
+            res.encoder.requires_grad_(False)
+        return res
 
     @classmethod
     def arg_parser(cls) -> argparse.ArgumentParser:
         parser = super().arg_parser()
         parser.add_argument("--encoder", default="unet", type=str)
         parser.add_argument("--cond-mult", default=16, type=int)
+        parser.add_argument("--freeze-encoder", action="store_true")
         return parser
 
     def load_from_pretrained(self, model: Savable) -> int:
