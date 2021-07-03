@@ -54,8 +54,7 @@ class StandardVQLoss(VQLoss):
 class ReviveVQLoss(StandardVQLoss):
     """
     A VQ-VAE loss with an additional term pulling every codebook entry
-    slightly towards its nearest neighbor in the inputs, preventing any
-    codebook entries from dying.
+    slightly towards the mean input to prevent dead centers.
     """
 
     def __init__(self, revival: float = 0.01, **kwargs):
@@ -69,11 +68,7 @@ class ReviveVQLoss(StandardVQLoss):
 
         flat_inputs, _ = flatten_channels(inputs)
         distances = embedding_distances(dictionary, flat_inputs)
-
-        # Take min over batch dimension, then mean over dictionary dimension.
-        min_dists = distances.min(dim=0)[0].mean()
-
-        return loss + self.revival * min_dists
+        return loss + self.revival * distances.mean()
 
 
 class VQ(nn.Module):
