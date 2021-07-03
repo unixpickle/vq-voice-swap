@@ -19,6 +19,7 @@ from .logger import Logger
 from .loss_tracker import LossTracker
 from .models import Savable, Classifier
 from .util import count_params, repeat_dataset
+from .vq import StandardVQLoss, ReviveVQLoss
 from .vq_vae import VQVAE
 
 
@@ -305,6 +306,13 @@ class DiffusionTrainLoop(TrainLoop):
 
 
 class VQVAETrainLoop(DiffusionTrainLoop):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if self.args.revival_loss:
+            self.vq_loss = ReviveVQLoss()
+        else:
+            self.vq_loss = StandardVQLoss()
+
     def compute_losses(
         self, data_batch: Dict[str, torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
@@ -314,7 +322,10 @@ class VQVAETrainLoop(DiffusionTrainLoop):
         else:
             extra_kwargs = dict()
         losses = self.model.losses(
-            audio_seq, **extra_kwargs, use_checkpoint=self.args.grad_checkpoint
+            self.vq_loss,
+            audio_seq,
+            **extra_kwargs,
+            use_checkpoint=self.args.grad_checkpoint,
         )
         return losses["mses"], losses["ts"], dict(vq_loss=losses["vq_loss"])
 
@@ -341,6 +352,7 @@ class VQVAETrainLoop(DiffusionTrainLoop):
         parser.add_argument("--encoder", default="unet", type=str)
         parser.add_argument("--cond-mult", default=16, type=int)
         parser.add_argument("--freeze-encoder", action="store_true")
+        parser.add_argument("--revival-loss", action="store_true")
         return parser
 
     def load_from_pretrained(self, model: Savable) -> int:
@@ -356,7 +368,8 @@ class VQVAETrainLoop(DiffusionTrainLoop):
 
     def step_optimizer(self):
         super().step_optimizer()
-        self.model.vq.revive_dead_entries()
+        if not self.args.revival_loss:
+            self.model.vq.revive_dead_entries()
 
     @classmethod
     def default_output_dir(cls) -> str:

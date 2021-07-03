@@ -25,10 +25,10 @@ class VQVAE(DiffusionModel):
         self.cond_mult = cond_mult
         self.encoder = encoder
         self.vq = VQ(self.cond_channels, 512)
-        self.vq_loss = VQLoss()
 
     def losses(
         self,
+        vq_loss: VQLoss,
         inputs: torch.Tensor,
         labels: Optional[torch.Tensor] = None,
         **extra_kwargs: Any,
@@ -36,6 +36,7 @@ class VQVAE(DiffusionModel):
         """
         Compute losses for training the VQVAE.
 
+        :param vq_loss: the vector-quantization loss function.
         :param inputs: the input [N x 1 x T] audio Tensor.
         :param labels: an [N] Tensor of integer labels.
         :return: a dict containing the following keys:
@@ -46,7 +47,7 @@ class VQVAE(DiffusionModel):
         """
         encoder_out = self.encoder(inputs, **extra_kwargs)
         vq_out = self.vq(encoder_out)
-        vq_loss = self.vq_loss(encoder_out, vq_out["embedded"])
+        vq_loss = vq_loss(encoder_out, vq_out["embedded"], self.vq.dictionary)
 
         ts = torch.rand(inputs.shape[0]).to(inputs)
         epsilon = torch.randn_like(inputs)

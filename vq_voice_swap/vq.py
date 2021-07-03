@@ -4,6 +4,7 @@ Implementation of the vector quantization step in a VQ-VAE.
 Code adapted from: https://github.com/unixpickle/vq-vae-2/blob/6874db74dbc8e7a24c33303c0aa12d66d803c725/vq_vae_2/vq.py
 """
 
+from abc import abstractmethod
 import random
 from typing import Callable, Dict, Tuple
 
@@ -15,24 +16,64 @@ import torch.nn.functional as F
 
 class VQLoss(nn.Module):
     """
-    A special loss function for training a VQ layer.
+    An abstract loss function for a VQ layer.
+    """
+
+    @abstractmethod
+    def forward(
+        self, inputs: torch.Tensor, embedded: torch.Tensor, dictionary: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Compute a VQ loss given the unquantized vectors, the embedded outputs,
+        and the entire embedding table.
+
+        :param inputs: an [N x C x ...] Tensor of inputs.
+        :param embedded: a Tensor like `inputs` of embedded vectors.
+        :param dictionary: a [D x C] dictionary.
+        """
+
+
+class StandardVQLoss(VQLoss):
+    """
+    The standard VQ-VAE loss for vector quantization.
     """
 
     def __init__(self, commitment: float = 0.25):
         super().__init__()
         self.commitment = commitment
 
-    def forward(self, inputs: torch.Tensor, embedded: torch.Tensor) -> torch.Tensor:
-        """
-        Compute the codebook and commitment losses for a VQ layer.
-
-        :param inputs: inputs to the VQ layer.
-        :param embedded: outputs from the VQ layer.
-        :return: a scalar Tensor loss term.
-        """
+    def forward(
+        self, inputs: torch.Tensor, embedded: torch.Tensor, dictionary: torch.Tensor
+    ) -> torch.Tensor:
+        _ = dictionary
         codebook_loss = ((inputs.detach() - embedded) ** 2).mean()
         comm_loss = ((inputs - embedded.detach()) ** 2).mean()
         return codebook_loss + self.commitment * comm_loss
+
+
+class ReviveVQLoss(StandardVQLoss):
+    """
+    A VQ-VAE loss with an additional term pulling every codebook entry
+    slightly towards its nearest neighbor in the inputs, preventing any
+    codebook entries from dying.
+    """
+
+    def __init__(self, revival: float = 0.01, **kwargs):
+        super().__init__(**kwargs)
+        self.revival = revival
+
+    def forward(
+        self, inputs: torch.Tensor, embedded: torch.Tensor, dictionary: torch.Tensor
+    ) -> torch.Tensor:
+        loss = super().forward(inputs, embedded, dictionary)
+
+        flat_inputs, _ = flatten_channels(inputs)
+        distances = embedding_distances(dictionary, flat_inputs)
+
+        # Take min over batch dimension, then mean over dictionary dimension.
+        min_dists = distances.min(dim=0)[0].mean()
+
+        return loss + self.revival * min_dists
 
 
 class VQ(nn.Module):
