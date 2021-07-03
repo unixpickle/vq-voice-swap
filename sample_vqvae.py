@@ -31,7 +31,11 @@ def main():
     in_seq = torch.from_numpy(chunk[None, None]).to(device)
 
     print("encoding audio sequence...")
-    encoded = model.encode(in_seq)
+    if args.no_vq:
+        with torch.no_grad():
+            encoded = model.encoder(in_seq)
+    else:
+        encoded = model.encode(in_seq)
 
     print("decoding audio samples...")
     labels = torch.tensor([args.label]).long().to(device)
@@ -60,6 +64,7 @@ def arg_parser():
     parser.add_argument("--label", type=int, default=None, required=True)
     parser.add_argument("--input-file", type=str, default=None, required=True)
     parser.add_argument("--encoding", type=str, default="linear")
+    parser.add_argument("--no-vq", action="store_true")
     parser.add_argument("checkpoint_path", type=str)
     parser.add_argument("output_file", type=str)
     return parser

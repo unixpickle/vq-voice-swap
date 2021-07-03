@@ -1,6 +1,7 @@
 from typing import Any, Dict, Optional
 
 import torch
+from torch._C import Value
 
 from .diffusion_model import DiffusionModel
 from .models import make_encoder
@@ -30,7 +31,7 @@ class VQVAE(DiffusionModel):
         self,
         inputs: torch.Tensor,
         labels: Optional[torch.Tensor] = None,
-        **extra_kwargs: Any
+        **extra_kwargs: Any,
     ) -> Dict[str, torch.Tensor]:
         """
         Compute losses for training the VQVAE.
@@ -79,16 +80,23 @@ class VQVAE(DiffusionModel):
         """
         Sample the decoder using encoded audio and corresponding labels.
 
-        :param codes: an [N x T1] Tensor of latent codes.
+        :param codes: an [N x T1] Tensor of latent codes or an [N x C x T1]
+                      Tensor of latent code embeddings.
         :param labels: an [N] Tensor of integer labels.
         :param steps: number of diffusion steps.
         :param progress: if True, show a progress bar with tqdm.
         :param key: the key from predictions() to use as a predictor.
         :return: an [N x 1 x T] Tensor of audio.
         """
-        cond_seq = self.vq.embed(codes)
+        if len(codes.shape) == 2:
+            cond_seq = self.vq.embed(codes)
+        elif len(codes.shape) == 3:
+            cond_seq = codes
+        else:
+            raise ValueError(f"unsupported codes shape: {codes.shape}")
+
         x_T = torch.randn(
-            codes.shape[0], 1, codes.shape[1] * self.encoder.downsample_rate
+            codes.shape[0], 1, codes.shape[-1] * self.encoder.downsample_rate
         ).to(codes.device)
         return self.diffusion.ddpm_sample(
             x_T,
