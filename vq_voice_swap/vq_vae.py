@@ -14,7 +14,12 @@ class VQVAE(DiffusionModel):
     """
 
     def __init__(
-        self, base_channels: int, enc_name: str = "unet", cond_mult: int = 16, **kwargs
+        self,
+        base_channels: int,
+        enc_name: str = "unet",
+        cond_mult: int = 16,
+        dictionary_size: int = 512,
+        **kwargs,
     ):
         encoder = make_encoder(
             enc_name=enc_name, base_channels=base_channels, cond_mult=cond_mult
@@ -23,8 +28,9 @@ class VQVAE(DiffusionModel):
         super().__init__(base_channels=base_channels, **kwargs)
         self.enc_name = enc_name
         self.cond_mult = cond_mult
+        self.dictionary_size = dictionary_size
         self.encoder = encoder
-        self.vq = VQ(self.cond_channels, 512)
+        self.vq = VQ(self.cond_channels, dictionary_size)
 
     def losses(
         self,
@@ -124,7 +130,13 @@ class VQVAE(DiffusionModel):
 
     def save_kwargs(self) -> Dict[str, Any]:
         res = super().save_kwargs()
-        res.update(dict(enc_name=self.enc_name, cond_mult=self.cond_mult))
+        res.update(
+            dict(
+                enc_name=self.enc_name,
+                cond_mult=self.cond_mult,
+                dictionary_size=self.dictionary_size,
+            )
+        )
         return res
 
 

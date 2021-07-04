@@ -349,6 +349,7 @@ class VQVAETrainLoop(DiffusionTrainLoop):
             base_channels=self.args.base_channels,
             enc_name=self.args.encoder,
             cond_mult=self.args.cond_mult,
+            dictionary_size=self.args.dictionary_size,
             schedule_name=self.args.schedule,
             dropout=self.args.dropout,
             num_labels=self.num_labels if self.args.class_cond else None,
@@ -362,6 +363,7 @@ class VQVAETrainLoop(DiffusionTrainLoop):
         parser = super().arg_parser()
         parser.add_argument("--encoder", default="unet", type=str)
         parser.add_argument("--cond-mult", default=16, type=int)
+        parser.add_argument("--dictionary-size", default=512, type=int)
         parser.add_argument("--freeze-encoder", action="store_true")
         parser.add_argument("--commitment-coeff", default=0.25, type=float)
         parser.add_argument("--revival-coeff", default=0.0, type=float)
