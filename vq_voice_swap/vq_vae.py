@@ -140,7 +140,7 @@ def jitter_seq(seq: torch.Tensor, p: float) -> torch.Tensor:
     """
     right_shifted = torch.cat([seq[..., :1], seq[..., :-1]], dim=-1)
     left_shifted = torch.cat([seq[..., 1:], seq[..., -1:]], dim=-1)
-    nums = torch.rand(seq.shape[0], 1, seq.shape[-1])
+    nums = torch.rand(seq.shape[0], 1, seq.shape[-1]).to(seq.device)
 
     return torch.where(
         nums < p / 2,
