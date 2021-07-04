@@ -86,7 +86,7 @@ class ConvMFCCEncoder(Encoder):
         accel = deltas(deriv)
         h = torch.cat([h, deriv, accel], dim=1)
         for block in self.blocks:
-            if use_checkpoint:
+            if use_checkpoint and h.requires_grad:
                 h = checkpoint(block, h)
             else:
                 h = block(h)
