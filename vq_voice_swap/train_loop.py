@@ -334,6 +334,7 @@ class VQVAETrainLoop(DiffusionTrainLoop):
         losses = self.model.losses(
             self.vq_loss,
             audio_seq,
+            jitter=self.args.jitter,
             **extra_kwargs,
             use_checkpoint=self.args.grad_checkpoint,
         )
@@ -364,6 +365,7 @@ class VQVAETrainLoop(DiffusionTrainLoop):
         parser.add_argument("--freeze-encoder", action="store_true")
         parser.add_argument("--commitment-coeff", default=0.25, type=float)
         parser.add_argument("--revival-coeff", default=0.0, type=float)
+        parser.add_argument("--jitter", default=0.0, type=float)
         return parser
 
     def load_from_pretrained(self, model: Savable) -> int:

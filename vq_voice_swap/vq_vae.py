@@ -31,6 +31,7 @@ class VQVAE(DiffusionModel):
         vq_loss: VQLoss,
         inputs: torch.Tensor,
         labels: Optional[torch.Tensor] = None,
+        jitter: float = 0.0,
         **extra_kwargs: Any,
     ) -> Dict[str, torch.Tensor]:
         """
@@ -39,6 +40,7 @@ class VQVAE(DiffusionModel):
         :param vq_loss: the vector-quantization loss function.
         :param inputs: the input [N x 1 x T] audio Tensor.
         :param labels: an [N] Tensor of integer labels.
+        :param jitter: jitter regularization to use.
         :return: a dict containing the following keys:
                  - "vq_loss": loss for the vector quantization layer.
                  - "mse": mean loss for all batch elements.
@@ -46,6 +48,8 @@ class VQVAE(DiffusionModel):
                  - "mses": a 1-D tensor of the mean MSE losses per batch entry.
         """
         encoder_out = self.encoder(inputs, **extra_kwargs)
+        if jitter:
+            encoder_out = jitter_seq(encoder_out, jitter)
         vq_out = self.vq(encoder_out)
         vq_loss = vq_loss(encoder_out, vq_out["embedded"], self.vq.dictionary)
 
@@ -122,3 +126,24 @@ class VQVAE(DiffusionModel):
         res = super().save_kwargs()
         res.update(dict(enc_name=self.enc_name, cond_mult=self.cond_mult))
         return res
+
+
+def jitter_seq(seq: torch.Tensor, p: float) -> torch.Tensor:
+    """
+    Apply temporal jitter to a latent sequence.
+
+    This regularization technique was proposed in
+    https://arxiv.org/abs/1901.08810.
+
+    :param seq: an [N x C x T] Tensor.
+    :param p: probability of a timestep being replaced.
+    """
+    right_shifted = torch.cat([seq[..., :1], seq[..., :-1]], dim=-1)
+    left_shifted = torch.cat([seq[..., 1:], seq[..., -1:]], dim=-1)
+    nums = torch.rand(seq.shape[0], 1, seq.shape[-1])
+
+    return torch.where(
+        nums < p / 2,
+        right_shifted,
+        torch.where(nums < p, left_shifted, seq),
+    )
