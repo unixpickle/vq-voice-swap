@@ -71,6 +71,11 @@ class ConvMFCCEncoder(Encoder):
                 nn.Conv1d(self.mid_channels, self.out_channels, 1),
             ]
         )
+        # Zero output so that by default we don't affect the
+        # behavior of downstream models.
+        for p in self.blocks[-1].parameters():
+            with torch.no_grad():
+                p.zero_()
 
     def forward(
         self,
