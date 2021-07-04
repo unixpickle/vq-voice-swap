@@ -67,11 +67,8 @@ class ConvMFCCEncoder(Encoder):
                     ResConv(self.mid_channels, self.mid_channels, 3, padding=1)
                     for _ in range(2)
                 ],
-                *[
-                    ResConv(self.mid_channels, self.mid_channels, 3, padding=1)
-                    for _ in range(4)
-                ],
-                nn.Conv1d(self.mid_channels, 64, 1),
+                *[ResConv(self.mid_channels, self.mid_channels, 1) for _ in range(4)],
+                nn.Conv1d(self.mid_channels, self.out_channels, 1),
             ]
         )
 
@@ -81,6 +78,9 @@ class ConvMFCCEncoder(Encoder):
         use_checkpoint: bool = False,
     ) -> torch.Tensor:
         assert x.shape[1] == 1, "input must only have one channel"
+        if self.input_ulaw:
+            # MFCC layer expects linear waveform.
+            x = invert_ulaw(x)
         h = self.mfcc(x[:, 0, :])
         deriv = deltas(h)
         accel = deltas(deriv)
@@ -90,6 +90,7 @@ class ConvMFCCEncoder(Encoder):
                 h = checkpoint(block, h)
             else:
                 h = block(h)
+        print(h.shape)
         return h
 
     @property
@@ -115,3 +116,7 @@ def deltas(seq: torch.Tensor) -> torch.Tensor:
     d1 = right_shifted - seq
     d2 = seq - left_shifted
     return (d1 + d2) / 2
+
+
+def invert_ulaw(x: torch.Tensor, mu: float = 255.0) -> torch.Tensor:
+    return x.sign() * (1 / mu) * ((1 + mu) ** x.abs() - 1)
