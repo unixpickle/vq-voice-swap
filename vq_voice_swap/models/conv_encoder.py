@@ -90,7 +90,6 @@ class ConvMFCCEncoder(Encoder):
                 h = checkpoint(block, h)
             else:
                 h = block(h)
-        print(h.shape)
         return h
 
     @property
