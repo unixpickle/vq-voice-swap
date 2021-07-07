@@ -356,6 +356,7 @@ class VQVAETrainLoop(DiffusionTrainLoop):
         )
         if self.args.freeze_encoder:
             res.encoder.requires_grad_(False)
+        res.vq.dead_rate = self.args.dead_rate
         return res
 
     @classmethod
@@ -367,6 +368,7 @@ class VQVAETrainLoop(DiffusionTrainLoop):
         parser.add_argument("--freeze-encoder", action="store_true")
         parser.add_argument("--commitment-coeff", default=0.25, type=float)
         parser.add_argument("--revival-coeff", default=0.0, type=float)
+        parser.add_argument("--dead-rate", default=100, type=int)
         parser.add_argument("--jitter", default=0.0, type=float)
         return parser
 
