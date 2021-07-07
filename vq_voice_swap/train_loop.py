@@ -343,8 +343,15 @@ class VQVAETrainLoop(DiffusionTrainLoop):
     def model_class(self) -> Any:
         return VQVAE
 
+    def create_model(self) -> Tuple[Savable, bool]:
+        model, resume = super().create_model()
+        if self.args.freeze_encoder:
+            model.encoder.requires_grad_(False)
+        model.vq.dead_rate = self.args.dead_rate
+        return model, resume
+
     def create_new_model(self) -> Savable:
-        res = self.model_class()(
+        return self.model_class()(
             pred_name=self.args.predictor,
             base_channels=self.args.base_channels,
             enc_name=self.args.encoder,
@@ -354,10 +361,6 @@ class VQVAETrainLoop(DiffusionTrainLoop):
             dropout=self.args.dropout,
             num_labels=self.num_labels if self.args.class_cond else None,
         )
-        if self.args.freeze_encoder:
-            res.encoder.requires_grad_(False)
-        res.vq.dead_rate = self.args.dead_rate
-        return res
 
     @classmethod
     def arg_parser(cls) -> argparse.ArgumentParser:
