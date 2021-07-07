@@ -158,6 +158,7 @@ class VQ(nn.Module):
         counts = self.usage_count.detach().cpu().numpy()
         new_dictionary = None
         inputs_numpy = None
+        input_probs = None
         for i, count in enumerate(counts):
             if count:
                 continue
@@ -165,7 +166,18 @@ class VQ(nn.Module):
                 new_dictionary = self.dictionary.detach().cpu().numpy()
             if inputs_numpy is None:
                 inputs_numpy = inputs.detach().cpu().numpy()
-            new_dictionary[i] = random.choice(inputs_numpy)
+                # K-means++ init: probabilities proportional to dist^2.
+                input_probs = (
+                    embedding_distances(self.dictionary, inputs)
+                    .min(-1)[0]
+                    .detach()
+                    .cpu()
+                    .numpy()
+                )
+                input_probs /= np.sum(input_probs)
+            new_dictionary[i] = inputs_numpy[
+                np.random.choice(len(input_probs), p=input_probs)
+            ]
             counts[i] = self.dead_rate
         if new_dictionary is not None:
             dict_tensor = torch.from_numpy(new_dictionary).to(self.dictionary)
