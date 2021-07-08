@@ -347,6 +347,8 @@ class VQVAETrainLoop(DiffusionTrainLoop):
         model, resume = super().create_model()
         if self.args.freeze_encoder:
             model.encoder.requires_grad_(False)
+        if self.args.freeze_vq:
+            model.vq.requires_grad_(False)
         model.vq.dead_rate = self.args.dead_rate
         return model, resume
 
@@ -369,6 +371,7 @@ class VQVAETrainLoop(DiffusionTrainLoop):
         parser.add_argument("--cond-mult", default=16, type=int)
         parser.add_argument("--dictionary-size", default=512, type=int)
         parser.add_argument("--freeze-encoder", action="store_true")
+        parser.add_argument("--freeze-vq", action="store_true")
         parser.add_argument("--commitment-coeff", default=0.25, type=float)
         parser.add_argument("--revival-coeff", default=0.0, type=float)
         parser.add_argument("--dead-rate", default=100, type=int)
@@ -388,7 +391,7 @@ class VQVAETrainLoop(DiffusionTrainLoop):
 
     def step_optimizer(self):
         super().step_optimizer()
-        if not self.args.revival_coeff:
+        if not self.args.revival_coeff and not self.args.freeze_vq:
             self.model.vq.revive_dead_entries()
 
     @classmethod
