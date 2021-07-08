@@ -42,6 +42,13 @@ def main():
     sample = model.decode(
         encoded, labels, steps=args.sample_steps, progress=True, constrain=True
     )
+
+    if args.check_vq:
+        assert not args.no_vq
+        encoded_1 = model.encode(sample)
+        count = (encoded == encoded_1).float().mean()
+        print(f"fraction of consistent VQ codes: {count}")
+
     sample = sample.clamp(-1, 1).cpu().numpy().flatten()
 
     print(f"saving result to {args.output_file}...")
@@ -65,6 +72,7 @@ def arg_parser():
     parser.add_argument("--input-file", type=str, default=None, required=True)
     parser.add_argument("--encoding", type=str, default="linear")
     parser.add_argument("--no-vq", action="store_true")
+    parser.add_argument("--check-vq", action="store_true")
     parser.add_argument("checkpoint_path", type=str)
     parser.add_argument("output_file", type=str)
     return parser
