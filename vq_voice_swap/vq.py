@@ -171,6 +171,7 @@ class VQ(nn.Module):
                     embedding_distances(self.dictionary, inputs)
                     .min(-1)[0]
                     .detach()
+                    .clamp(min=0)
                     .cpu()
                     .numpy()
                 )
