@@ -203,24 +203,26 @@ class TrainLoop(ABC):
     def freeze_parameters(self, params: Set[nn.Parameter]):
         param_to_idx = {param: idx for idx, param in enumerate(self.model.parameters())}
         count = 0
+        sd = self.opt.state_dict().copy()
         for p in params:
-            self.freeze_parameter(param_to_idx[p], p)
+            self.freeze_parameter(param_to_idx[p], p, sd)
             count += p.numel()
         if count:
+            self.opt.load_state_dict(sd)
             print(f"frozen parameters: {count}")
 
-    def freeze_parameter(self, idx: int, param: nn.Parameter):
+    def freeze_parameter(
+        self, idx: int, param: nn.Parameter, opt_state: Dict[str, Any]
+    ):
         param.requires_grad_(False)
-        sd = self.opt.state_dict().copy()
-        if idx in sd["state"]:
+        if idx in opt_state["state"]:
             # A step has been taken, and the parameter might have some
             # momentum built up that we need to cancel out.
-            assert sd["state"][idx]["exp_avg"].shape == param.shape
-            sd["state"] = sd["state"].copy()
-            sd["state"][idx] = sd["state"][idx].copy()
-            sd["state"][idx]["exp_avg"].zero_()
-            sd["state"][idx]["exp_avg_sq"].zero_()
-        self.opt.load_state_dict(sd)
+            assert opt_state["state"][idx]["exp_avg"].shape == param.shape
+            opt_state["state"] = opt_state["state"].copy()
+            opt_state["state"][idx] = opt_state["state"][idx].copy()
+            opt_state["state"][idx]["exp_avg"].zero_()
+            opt_state["state"][idx]["exp_avg_sq"].zero_()
 
     def create_logger_tracker(self) -> Tuple[Logger, LossTracker]:
         return Logger(self.log_path(), resume=self.resume), LossTracker()
