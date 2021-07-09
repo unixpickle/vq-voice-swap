@@ -432,6 +432,52 @@ class VQVAETrainLoop(DiffusionTrainLoop):
         return "ckpt_vqvae"
 
 
+class VQVAEAddClassesTrainLoop(VQVAETrainLoop):
+    def __init__(self, **kwargs):
+        self.pretrained_num_labels = None  # set during model load
+        super().__init__(**kwargs)
+        assert self.args.class_cond
+
+    def compute_losses(
+        self, data_batch: Dict[str, torch.Tensor]
+    ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
+        data_batch["label"] = data_batch["label"] + self.pretrained_num_labels
+        return super().compute_losses(data_batch)
+
+    def create_model(self) -> Tuple[Savable, bool]:
+        assert self.args.pretrained_path, "must load from a pre-trained VQVAE"
+        assert self.args.class_cond, "must create a class-conditional model"
+        self.pretrained_num_labels = VQVAE.load(self.args.pretrained_path).num_labels
+
+        return super().create_model()
+
+    def create_new_model(self) -> Savable:
+        return self.model_class()(
+            pred_name=self.args.predictor,
+            base_channels=self.args.base_channels,
+            enc_name=self.args.encoder,
+            cond_mult=self.args.cond_mult,
+            dictionary_size=self.args.dictionary_size,
+            schedule_name=self.args.schedule,
+            dropout=self.args.dropout,
+            num_labels=self.num_labels + self.pretrained_num_labels,
+        )
+
+    def load_from_pretrained(self, model: Savable) -> int:
+        base_model = VQVAE.load(self.args.pretrained_path)
+        base_model.add_labels(self.num_labels)
+        return model.load_from_pretrained(base_model)
+
+    def frozen_parameters(self) -> Set[nn.Parameter]:
+        label_params = set(self.model.predictor.label_parameters())
+        x = set(x for x in self.model.parameters() if x not in label_params)
+        return x
+
+    @classmethod
+    def default_output_dir(cls) -> str:
+        return "ckpt_vqvae_added"
+
+
 class ClassifierTrainLoop(TrainLoop):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
