@@ -1,6 +1,5 @@
 from typing import Iterable, Iterator
 
-import numpy as np
 import torch.nn as nn
 
 
@@ -10,4 +9,4 @@ def repeat_dataset(data_loader: Iterable) -> Iterator:
 
 
 def count_params(model: nn.Module) -> int:
-    return sum(np.prod(x.shape) for x in model.parameters())
+    return sum(x.numel() for x in model.parameters())

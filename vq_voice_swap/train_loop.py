@@ -4,10 +4,11 @@ import json
 import os
 import sys
 import time
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any, Dict, Iterable, List, Set, Tuple
 from vq_voice_swap.loss_tracker import LossTracker
 
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import AdamW
 
@@ -50,6 +51,7 @@ class TrainLoop(ABC):
         self.total_steps = self.logger.start_step
         self.loop_steps = 0
 
+        self.freeze_parameters(self.frozen_parameters())
         self.write_run_info()
 
     def loop(self):
@@ -194,6 +196,31 @@ class TrainLoop(ABC):
             print("loading optimizer from checkpoint...")
             opt.load_state_dict(torch.load(self.opt_path(), map_location="cpu"))
         return opt
+
+    def frozen_parameters(self) -> Set[nn.Parameter]:
+        return set()
+
+    def freeze_parameters(self, params: Set[nn.Parameter]):
+        param_to_idx = {param: idx for idx, param in enumerate(self.model.parameters())}
+        count = 0
+        for p in params:
+            self.freeze_parameter(param_to_idx[p], p)
+            count += p.numel()
+        if count:
+            print(f"frozen parameters: {count}")
+
+    def freeze_parameter(self, idx: int, param: nn.Parameter):
+        param.requires_grad_(False)
+        sd = self.opt.state_dict().copy()
+        if idx in sd["state"]:
+            # A step has been taken, and the parameter might have some
+            # momentum built up that we need to cancel out.
+            assert sd["state"][idx]["exp_avg"].shape == param.shape
+            sd["state"] = sd["state"].copy()
+            sd["state"][idx] = sd["state"][idx].copy()
+            sd["state"][idx]["exp_avg"].zero_()
+            sd["state"][idx]["exp_avg_sq"].zero_()
+        self.opt.load_state_dict(sd)
 
     def create_logger_tracker(self) -> Tuple[Logger, LossTracker]:
         return Logger(self.log_path(), resume=self.resume), LossTracker()
@@ -345,10 +372,6 @@ class VQVAETrainLoop(DiffusionTrainLoop):
 
     def create_model(self) -> Tuple[Savable, bool]:
         model, resume = super().create_model()
-        if self.args.freeze_encoder:
-            model.encoder.requires_grad_(False)
-        if self.args.freeze_vq:
-            model.vq.requires_grad_(False)
         model.vq.dead_rate = self.args.dead_rate
         return model, resume
 
@@ -363,6 +386,14 @@ class VQVAETrainLoop(DiffusionTrainLoop):
             dropout=self.args.dropout,
             num_labels=self.num_labels if self.args.class_cond else None,
         )
+
+    def frozen_parameters(self) -> Set[nn.Parameter]:
+        res = set()
+        if self.args.freeze_encoder:
+            res.update(self.model.encoder.parameters())
+        if self.args.freeze_vq:
+            res.update(self.model.vq.parameters())
+        return res
 
     @classmethod
     def arg_parser(cls) -> argparse.ArgumentParser:
