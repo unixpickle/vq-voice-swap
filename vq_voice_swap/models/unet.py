@@ -2,7 +2,7 @@
 Adapted from https://github.com/openai/guided-diffusion/blob/b16b0a180ffac9da8a6a03f1e78de8e96669eee8/guided_diffusion/unet.py.
 """
 
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -161,6 +161,20 @@ class UNetPredictor(Predictor):
 
         h = self.out(h)
         return h
+
+    def add_labels(self, n: int):
+        assert self.num_labels is not None
+        old_weight = self.class_embed.weight.detach()
+        old_count = self.num_labels
+
+        self.num_labels += n
+        self.class_embed = nn.Embedding(self.num_labels, old_weight.shape[-1])
+        with torch.no_grad():
+            self.class_embed.weight[:old_count].copy_(old_weight)
+
+    def label_parameters(self) -> List[nn.Parameter]:
+        assert self.num_labels is not None
+        return list(self.class_embed.parameters())
 
     @property
     def downsample_rate(self) -> int:

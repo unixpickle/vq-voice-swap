@@ -2,7 +2,7 @@ from abc import abstractmethod
 import functools
 import os
 import tempfile
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, List
 
 import numpy as np
 import torch
@@ -18,6 +18,22 @@ class Predictor(nn.Module):
 
     def condition(self, **kwargs) -> Callable:
         return functools.partial(self, **kwargs)
+
+    @abstractmethod
+    def add_labels(self, n: int):
+        """
+        Add a number of class label embeddings.
+
+        This should only be called on class-conditional predictors.
+        """
+
+    @abstractmethod
+    def label_parameters(self) -> List[nn.Parameter]:
+        """
+        Get all of the parameters which encode label information.
+
+        This should only be called on class-conditional predictors.
+        """
 
     @property
     @abstractmethod

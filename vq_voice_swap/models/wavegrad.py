@@ -4,7 +4,7 @@ and WaveGrad (https://arxiv.org/abs/2009.00713).
 """
 
 import math
-from typing import Optional
+from typing import List, Optional
 
 import torch
 import torch.nn as nn
@@ -117,6 +117,13 @@ class WaveGradPredictor(Predictor):
         out = self.u_conv_2(out)
         return out
 
+    def add_labels(self, n: int):
+        for block in self.u_blocks:
+            block.add_labels(n)
+
+    def label_parameters(self) -> List[nn.Parameter]:
+        return [x for n, x in self.named_parameters() if "label_emb" in n]
+
     @property
     def downsample_rate(self) -> int:
         return 64
@@ -216,6 +223,10 @@ class UBlock(nn.Module):
         output = self.block_3(self.film_2(output, z, t, labels=labels))
         output = self.block_4(self.film_3(output, z, t, labels=labels))
         return output + res_out
+
+    def add_labels(self, n: int):
+        for film in [self.film_1, self.film_2, self.film_3]:
+            film.add_labels(n)
 
 
 class DBlock(nn.Module):
@@ -323,6 +334,16 @@ class FILM(nn.Module):
         alpha_beta = self.out_layer(embedding)
         alpha, beta = torch.split(alpha_beta, self.out_channels, dim=1)
         return inputs * (1 + alpha) + beta
+
+    def add_labels(self, n: int):
+        assert self.num_labels is not None
+        old_weight = self.label_emb.weight.detach()
+        old_count = self.num_labels
+
+        self.num_labels += n
+        self.label_emb = nn.Embedding(self.num_labels, old_weight.shape[-1])
+        with torch.no_grad():
+            self.label_emb.weight[:old_count].copy_(old_weight)
 
 
 class TimeEmbedding(nn.Module):
