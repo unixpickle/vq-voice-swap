@@ -424,8 +424,11 @@ class VQVAETrainLoop(DiffusionTrainLoop):
 
     def step_optimizer(self):
         super().step_optimizer()
-        if not self.args.revival_coeff and not self.args.freeze_vq:
+        if self.should_revive():
             self.model.vq.revive_dead_entries()
+
+    def should_revive(self) -> bool:
+        return not self.args.revival_coeff and not self.args.freeze_vq
 
     @classmethod
     def default_output_dir(cls) -> str:
@@ -472,6 +475,12 @@ class VQVAEAddClassesTrainLoop(VQVAETrainLoop):
         label_params = set(self.model.predictor.label_parameters())
         x = set(x for x in self.model.parameters() if x not in label_params)
         return x
+
+    def should_revive(self) -> bool:
+        # Don't mess with the VQ codebook, since we might not be
+        # using all of it for the new classes, but still want to
+        # preserve functionality on the old classes.
+        return False
 
     @classmethod
     def default_output_dir(cls) -> str:
