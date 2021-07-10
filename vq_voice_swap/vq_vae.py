@@ -4,7 +4,7 @@ import torch
 from torch._C import Value
 
 from .diffusion_model import DiffusionModel
-from .models import make_encoder
+from .models import EncoderPredictor, make_encoder
 from .vq import VQ, VQLoss
 
 
@@ -87,6 +87,8 @@ class VQVAE(DiffusionModel):
         steps: int = 100,
         progress: bool = False,
         constrain: bool = False,
+        enc_pred: Optional[EncoderPredictor] = None,
+        enc_pred_scale: float = 1.0,
     ) -> torch.Tensor:
         """
         Sample the decoder using encoded audio and corresponding labels.
@@ -97,6 +99,8 @@ class VQVAE(DiffusionModel):
         :param steps: number of diffusion steps.
         :param progress: if True, show a progress bar with tqdm.
         :param key: the key from predictions() to use as a predictor.
+        :param enc_pred: an encoder predictor for guidance.
+        :param enc_pred_scale: the scale for guidance.
         :return: an [N x 1 x T] Tensor of audio.
         """
         if len(codes.shape) == 2:
@@ -105,6 +109,15 @@ class VQVAE(DiffusionModel):
             cond_seq = codes
         else:
             raise ValueError(f"unsupported codes shape: {codes.shape}")
+
+        targets = self.vq(cond_seq)["idxs"]
+
+        def cond_fn(x, ts):
+            with torch.enable_grad():
+                x_grad = x.detach().clone().requires_grad_(True)
+                losses = enc_pred.losses(x_grad, ts, targets) * targets.shape[-1]
+                grads = torch.autograd.grad(losses.sum(), x_grad)[0]
+            return grads * enc_pred_scale * -1
 
         x_T = torch.randn(
             codes.shape[0], 1, codes.shape[-1] * self.encoder.downsample_rate
@@ -117,6 +130,7 @@ class VQVAE(DiffusionModel):
             steps=steps,
             progress=progress,
             constrain=constrain,
+            cond_fn=cond_fn if enc_pred is not None else None,
         )
 
     @property

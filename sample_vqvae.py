@@ -7,6 +7,7 @@ import argparse
 import torch
 
 from vq_voice_swap.dataset import ChunkReader, ChunkWriter
+from vq_voice_swap.models import EncoderPredictor
 from vq_voice_swap.vq_vae import VQVAE
 
 
@@ -19,6 +20,11 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
+
+    enc_pred = None
+    if args.enc_pred_path:
+        print("loading encoder predictor")
+        enc_pred = EncoderPredictor.load(args.enc_pred_path).to(device)
 
     print(f"loading waveform from {args.input_file}...")
     reader = ChunkReader(
@@ -40,7 +46,13 @@ def main():
     print("decoding audio samples...")
     labels = torch.tensor([args.label]).long().to(device)
     sample = model.decode(
-        encoded, labels, steps=args.sample_steps, progress=True, constrain=True
+        encoded,
+        labels,
+        steps=args.sample_steps,
+        progress=True,
+        constrain=True,
+        enc_pred=enc_pred,
+        enc_pred_scale=args.enc_pred_scale,
     )
 
     if args.check_vq:
@@ -71,6 +83,8 @@ def arg_parser():
     parser.add_argument("--label", type=int, default=None, required=True)
     parser.add_argument("--input-file", type=str, default=None, required=True)
     parser.add_argument("--encoding", type=str, default="linear")
+    parser.add_argument("--enc-pred-path", type=str, default=None)
+    parser.add_argument("--enc-pred-scale", type=float, default=1.0)
     parser.add_argument("--no-vq", action="store_true")
     parser.add_argument("--check-vq", action="store_true")
     parser.add_argument("checkpoint_path", type=str)
