@@ -34,14 +34,13 @@ class TrainLoop(ABC):
         if args is None:
             args = self.arg_parser().parse_args()
         self.args = args
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         if not os.path.exists(args.output_dir):
             os.mkdir(args.output_dir)
 
         self.data_loader, self.num_labels = self.create_data_loader()
         self.model, self.resume = self.create_model()
-
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)
 
         self.emas = self.create_emas()
