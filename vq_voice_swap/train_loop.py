@@ -568,7 +568,7 @@ class EncoderPredictorTrainLoop(TrainLoop):
         return EncoderPredictor
 
     def create_model(self) -> Tuple[Savable, bool]:
-        self.vq_vae = VQVAE.load(self.args.vq_vae_path)
+        self.vq_vae = VQVAE.load(self.args.vq_vae_path).to(self.device)
         return super().create_model()
 
     def create_new_model(self) -> Savable:
