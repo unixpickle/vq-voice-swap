@@ -18,7 +18,7 @@ from .diffusion_model import DiffusionModel
 from .ema import ModelEMA
 from .logger import Logger
 from .loss_tracker import LossTracker
-from .models import Savable, Classifier
+from .models import Savable, Classifier, EncoderPredictor
 from .util import count_params, repeat_dataset
 from .vq import StandardVQLoss, ReviveVQLoss
 from .vq_vae import VQVAE
@@ -536,3 +536,57 @@ class ClassifierTrainLoop(TrainLoop):
     @classmethod
     def default_output_dir(cls) -> str:
         return "ckpt_classifier"
+
+
+class EncoderPredictorTrainLoop(TrainLoop):
+    def __init__(self, **kwargs):
+        self.vq_vae = None
+        super().__init__(**kwargs)
+
+    def compute_losses(
+        self, data_batch: Dict[str, torch.Tensor]
+    ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
+        audio_seq = data_batch["samples"][:, None].to(self.device)
+        ts = self.sample_timesteps(len(audio_seq))
+        with torch.no_grad():
+            targets = self.vq_vae.encode(audio_seq)
+        samples = self.vq_vae.diffusion.sample_q(audio_seq, ts)
+        losses = self.model.losses(
+            samples, ts, targets, use_checkpoint=self.args.grad_checkpoint
+        )
+        return losses, ts, dict()
+
+    def sample_timesteps(self, n: int) -> torch.Tensor:
+        ts = torch.rand(n, device=self.device)
+        if self.total_steps < self.args.curriculum_steps:
+            frac = self.total_steps / self.args.curriculum_steps
+            power = self.args.curriculum_start * (1 - frac) + frac
+            ts = ts ** power
+        return ts
+
+    def model_class(self) -> Any:
+        return EncoderPredictor
+
+    def create_model(self) -> Tuple[Savable, bool]:
+        self.vq_vae = VQVAE.load(self.args.vq_vae_path)
+        return super().create_model()
+
+    def create_new_model(self) -> Savable:
+        return self.model_class()(
+            base_channels=self.args.base_channels,
+            downsample_rate=self.vq_vae.encoder.downsample_rate,
+            num_latents=self.vq_vae.dictionary_size,
+        )
+
+    @classmethod
+    def arg_parser(cls) -> argparse.ArgumentParser:
+        parser = super().arg_parser()
+        parser.add_argument("--vq-vae-path", type=str, required=True)
+        parser.add_argument("--base-channels", type=int, default=32)
+        parser.add_argument("--curriculum-start", default=30.0, type=float)
+        parser.add_argument("--curriculum-steps", default=0, type=int)
+        return parser
+
+    @classmethod
+    def default_output_dir(cls) -> str:
+        return "ckpt_enc_pred"
