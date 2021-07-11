@@ -1,7 +1,6 @@
 from typing import Any, Dict, Optional
 
 import torch
-from torch._C import Value
 
 from .diffusion_model import DiffusionModel
 from .models import EncoderPredictor, make_encoder
