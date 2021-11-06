@@ -4,6 +4,7 @@ Inception Distance.
 """
 
 import argparse
+
 import numpy as np
 from scipy import linalg
 

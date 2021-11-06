@@ -3,17 +3,17 @@ Train an unconditional diffusion model on waveforms.
 """
 
 import argparse
-from functools import partial
 import math
 import os
+from functools import partial
 
 import torch
 import torch.nn.functional as F
 from tqdm.auto import tqdm
 
-from vq_voice_swap.models import Classifier
 from vq_voice_swap.dataset import ChunkWriter
 from vq_voice_swap.diffusion_model import DiffusionModel
+from vq_voice_swap.models import Classifier
 
 
 def main():

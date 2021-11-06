@@ -1,16 +1,17 @@
-from abc import ABC, abstractmethod
 import argparse
 import json
 import os
 import sys
 import time
+from abc import ABC, abstractmethod
 from typing import Any, Dict, Iterable, List, Set, Tuple
-from vq_voice_swap.loss_tracker import LossTracker
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import AdamW
+
+from vq_voice_swap.loss_tracker import LossTracker
 
 from .dataset import create_data_loader
 from .diffusion import Diffusion, make_schedule
@@ -18,9 +19,9 @@ from .diffusion_model import DiffusionModel
 from .ema import ModelEMA
 from .logger import Logger
 from .loss_tracker import LossTracker
-from .models import Savable, Classifier, EncoderPredictor
+from .models import Classifier, EncoderPredictor, Savable
 from .util import count_params, repeat_dataset
-from .vq import StandardVQLoss, ReviveVQLoss
+from .vq import ReviveVQLoss, StandardVQLoss
 from .vq_vae import VQVAE
 
 

@@ -1,4 +1,4 @@
-from .schedule import CosSchedule, Schedule, ExpSchedule
+from .schedule import CosSchedule, ExpSchedule, Schedule
 
 
 def make_schedule(name: str) -> Schedule:

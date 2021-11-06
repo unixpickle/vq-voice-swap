@@ -11,7 +11,7 @@ import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 
 from .base import Savable
-from .unet import UNetPredictor, ResBlock, activation, norm_act, scale_module
+from .unet import ResBlock, UNetPredictor, activation, norm_act, scale_module
 from .wavegrad import TimeEmbedding
 
 

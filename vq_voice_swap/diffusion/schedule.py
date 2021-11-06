@@ -1,5 +1,5 @@
-from abc import ABC, abstractmethod
 import math
+from abc import ABC, abstractmethod
 
 import torch
 
