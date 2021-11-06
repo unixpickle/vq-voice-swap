@@ -67,7 +67,7 @@ class VQVAE(DiffusionModel):
 
         if no_vq_prob:
             cond_mask = (torch.rand(len(cond)) > no_vq_prob).to(cond)
-            while len(cond_mask.shape) < cond.shape:
+            while len(cond_mask.shape) < len(cond.shape):
                 cond_mask = cond_mask[..., None]
             cond = cond * cond_mask
 
