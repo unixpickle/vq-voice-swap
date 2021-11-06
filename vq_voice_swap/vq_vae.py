@@ -37,6 +37,7 @@ class VQVAE(DiffusionModel):
         inputs: torch.Tensor,
         labels: Optional[torch.Tensor] = None,
         jitter: float = 0.0,
+        no_vq_prob: float = 0.0,
         **extra_kwargs: Any,
     ) -> Dict[str, torch.Tensor]:
         """
@@ -46,6 +47,7 @@ class VQVAE(DiffusionModel):
         :param inputs: the input [N x 1 x T] audio Tensor.
         :param labels: an [N] Tensor of integer labels.
         :param jitter: jitter regularization to use.
+        :param no_vq_prob: probability of dropping VQ codes per sequence.
         :return: a dict containing the following keys:
                  - "vq_loss": loss for the vector quantization layer.
                  - "mse": mean loss for all batch elements.
@@ -61,8 +63,16 @@ class VQVAE(DiffusionModel):
         ts = torch.rand(inputs.shape[0]).to(inputs)
         epsilon = torch.randn_like(inputs)
         noised_inputs = self.diffusion.sample_q(inputs, ts, epsilon=epsilon)
+        cond = vq_out["passthrough"]
+
+        if no_vq_prob:
+            cond_mask = (torch.rand(len(cond)) > no_vq_prob).to(cond)
+            while len(cond_mask.shape) < cond.shape:
+                cond_mask = cond_mask[..., None]
+            cond = cond * cond_mask
+
         predictions = self.predictor(
-            noised_inputs, ts, cond=vq_out["passthrough"], labels=labels, **extra_kwargs
+            noised_inputs, ts, cond=cond, labels=labels, **extra_kwargs
         )
         mses = ((predictions - epsilon) ** 2).flatten(1).mean(1)
         mse = mses.mean()

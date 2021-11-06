@@ -485,6 +485,64 @@ class VQVAEAddClassesTrainLoop(VQVAETrainLoop):
         return "ckpt_vqvae_added"
 
 
+class VQVAEUncondTrainLoop(VQVAETrainLoop):
+    def __init__(self, **kwargs):
+        # These are set during model load.
+        self.pretrained_kwargs = None
+        self.pretrained_num_labels = None
+
+        super().__init__(**kwargs)
+        assert self.args.class_cond
+
+    def compute_losses(
+        self, data_batch: Dict[str, torch.Tensor]
+    ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
+        label_mask = torch.rand(data_batch["label"].shape) > self.args.no_class_prob
+        labels = (data_batch["label"] + 1) * label_mask
+
+        audio_seq = data_batch["samples"][:, None].to(self.device)
+        extra_kwargs = dict(labels=labels.to(self.device))
+        losses = self.model.losses(
+            self.vq_loss,
+            audio_seq,
+            jitter=self.args.jitter,
+            **extra_kwargs,
+            use_checkpoint=self.args.grad_checkpoint,
+            no_vq_prob=self.args.no_vq_prob,
+        )
+        return losses["mses"], losses["ts"], dict(vq_loss=losses["vq_loss"])
+
+    def create_model(self) -> Tuple[Savable, bool]:
+        assert self.args.pretrained_path, "must load from a pre-trained VQVAE"
+        assert self.args.class_cond, "must create a class-conditional model"
+        pretrained = VQVAE.load(self.args.pretrained_path)
+        self.pretrained_num_labels = pretrained.num_labels
+        self.pretrained_kwargs = pretrained.save_kwargs()
+
+        return super().create_model()
+
+    def create_new_model(self) -> Savable:
+        kwargs = self.pretrained_kwargs.copy()
+        kwargs["num_labels"] = self.pretrained_num_labels + 1
+        return self.model_class()(**kwargs)
+
+    def load_from_pretrained(self, model: Savable) -> int:
+        base_model = VQVAE.load(self.args.pretrained_path)
+        base_model.add_labels(self.num_labels, end=False)
+        return model.load_from_pretrained(base_model)
+
+    @classmethod
+    def arg_parser(cls) -> argparse.ArgumentParser:
+        parser = super().arg_parser()
+        parser.add_argument("--no-class-prob", default=0.1, type=float)
+        parser.add_argument("--no-vq-prob", default=0.1, type=float)
+        return parser
+
+    @classmethod
+    def default_output_dir(cls) -> str:
+        return "ckpt_vqvae_uncond"
+
+
 class ClassifierTrainLoop(TrainLoop):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
