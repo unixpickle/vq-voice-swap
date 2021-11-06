@@ -528,7 +528,7 @@ class VQVAEUncondTrainLoop(VQVAETrainLoop):
 
     def load_from_pretrained(self, model: Savable) -> int:
         base_model = VQVAE.load(self.args.pretrained_path)
-        base_model.add_labels(self.num_labels, end=False)
+        base_model.add_labels(1, end=False)
         return model.load_from_pretrained(base_model)
 
     @classmethod
