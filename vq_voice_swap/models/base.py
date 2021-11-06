@@ -1,7 +1,7 @@
-from abc import abstractmethod
 import functools
 import os
 import tempfile
+from abc import abstractmethod
 from typing import Any, Callable, Dict, List
 
 import numpy as np
@@ -20,7 +20,7 @@ class Predictor(nn.Module):
         return functools.partial(self, **kwargs)
 
     @abstractmethod
-    def add_labels(self, n: int):
+    def add_labels(self, n: int, end: bool = True):
         """
         Add a number of class label embeddings.
 

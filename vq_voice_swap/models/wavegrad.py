@@ -117,9 +117,9 @@ class WaveGradPredictor(Predictor):
         out = self.u_conv_2(out)
         return out
 
-    def add_labels(self, n: int):
+    def add_labels(self, n: int, end: bool = True):
         for block in self.u_blocks:
-            block.add_labels(n)
+            block.add_labels(n, end=end)
 
     def label_parameters(self) -> List[nn.Parameter]:
         return [x for n, x in self.named_parameters() if "label_emb" in n]
@@ -224,9 +224,9 @@ class UBlock(nn.Module):
         output = self.block_4(self.film_3(output, z, t, labels=labels))
         return output + res_out
 
-    def add_labels(self, n: int):
+    def add_labels(self, n: int, end: bool = True):
         for film in [self.film_1, self.film_2, self.film_3]:
-            film.add_labels(n)
+            film.add_labels(n, end=end)
 
 
 class DBlock(nn.Module):
@@ -335,7 +335,7 @@ class FILM(nn.Module):
         alpha, beta = torch.split(alpha_beta, self.out_channels, dim=1)
         return inputs * (1 + alpha) + beta
 
-    def add_labels(self, n: int):
+    def add_labels(self, n: int, end: bool = True):
         assert self.num_labels is not None
         old_weight = self.label_emb.weight.detach()
         old_count = self.num_labels
@@ -343,7 +343,10 @@ class FILM(nn.Module):
         self.num_labels += n
         self.label_emb = nn.Embedding(self.num_labels, old_weight.shape[-1])
         with torch.no_grad():
-            self.label_emb.weight[:old_count].copy_(old_weight)
+            if end:
+                self.label_emb.weight[:old_count].copy_(old_weight)
+            else:
+                self.label_emb.weight[n:].copy_(old_weight)
 
 
 class TimeEmbedding(nn.Module):

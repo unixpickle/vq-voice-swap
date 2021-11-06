@@ -162,7 +162,7 @@ class UNetPredictor(Predictor):
         h = self.out(h)
         return h
 
-    def add_labels(self, n: int):
+    def add_labels(self, n: int, end: bool = True):
         assert self.num_labels is not None
         old_weight = self.class_embed.weight.detach()
         old_count = self.num_labels
@@ -170,7 +170,10 @@ class UNetPredictor(Predictor):
         self.num_labels += n
         self.class_embed = nn.Embedding(self.num_labels, old_weight.shape[-1])
         with torch.no_grad():
-            self.class_embed.weight[:old_count].copy_(old_weight)
+            if end:
+                self.class_embed.weight[:old_count].copy_(old_weight)
+            else:
+                self.class_embed.weight[n:].copy_(old_weight)
 
     def label_parameters(self) -> List[nn.Parameter]:
         assert self.num_labels is not None

@@ -42,9 +42,9 @@ class DiffusionModel(Savable):
     def forward(self, *args, **kwargs) -> torch.Tensor:
         return self.predictor(*args, **kwargs)
 
-    def add_labels(self, n: int):
+    def add_labels(self, n: int, end: bool = True):
         assert self.num_labels is not None, "model must be class-conditional"
-        self.predictor.add_labels(n)
+        self.predictor.add_labels(n, end=end)
         self.num_labels += n
 
     def save_kwargs(self) -> Dict[str, Any]:
