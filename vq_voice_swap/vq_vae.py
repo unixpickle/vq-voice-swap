@@ -98,6 +98,7 @@ class VQVAE(DiffusionModel):
         constrain: bool = False,
         enc_pred: Optional[EncoderPredictor] = None,
         enc_pred_scale: float = 1.0,
+        **kwargs,
     ) -> torch.Tensor:
         """
         Sample the decoder using encoded audio and corresponding labels.
@@ -140,6 +141,7 @@ class VQVAE(DiffusionModel):
             progress=progress,
             constrain=constrain,
             cond_fn=cond_fn if enc_pred is not None else None,
+            **kwargs,
         )
 
     def decode_uncond_guidance(
@@ -151,6 +153,7 @@ class VQVAE(DiffusionModel):
         constrain: bool = False,
         label_scale: float = 0.0,
         vq_scale: float = 0.0,
+        **kwargs,
     ) -> torch.Tensor:
         """
         Sample the decoder using unconditional guidance towards encoded audio
@@ -196,6 +199,7 @@ class VQVAE(DiffusionModel):
             steps=steps,
             progress=progress,
             constrain=constrain,
+            **kwargs,
         )
 
     @property

@@ -14,6 +14,8 @@ from vq_voice_swap.vq_vae import VQVAE
 def main():
     args = arg_parser().parse_args()
 
+    schedule = eval(args.schedule)
+
     print("loading model from checkpoint...")
     model = VQVAE.load(args.checkpoint_path)
     assert args.label + 1 < model.num_labels
@@ -48,6 +50,7 @@ def main():
         constrain=True,
         label_scale=args.guide_label_scale,
         vq_scale=args.guide_vq_scale,
+        schedule=schedule,
     )
 
     if args.check_vq:
@@ -78,6 +81,7 @@ def arg_parser():
     parser.add_argument("--label", type=int, default=None, required=True)
     parser.add_argument("--input-file", type=str, default=None, required=True)
     parser.add_argument("--encoding", type=str, default="linear")
+    parser.add_argument("--schedule", default="lambda t: t", type=str)
     parser.add_argument("--guide-label-scale", type=float, default=1.0)
     parser.add_argument("--guide-vq-scale", type=float, default=0.0)
     parser.add_argument("--no-vq", action="store_true")
