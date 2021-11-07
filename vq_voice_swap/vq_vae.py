@@ -107,7 +107,7 @@ class VQVAE(DiffusionModel):
         :param labels: an [N] Tensor of integer labels.
         :param steps: number of diffusion steps.
         :param progress: if True, show a progress bar with tqdm.
-        :param key: the key from predictions() to use as a predictor.
+        :param constrain: if True, clamp x_start predictions.
         :param enc_pred: an encoder predictor for guidance.
         :param enc_pred_scale: the scale for guidance.
         :return: an [N x 1 x T] Tensor of audio.
@@ -140,6 +140,62 @@ class VQVAE(DiffusionModel):
             progress=progress,
             constrain=constrain,
             cond_fn=cond_fn if enc_pred is not None else None,
+        )
+
+    def decode_uncond_guidance(
+        self,
+        codes: torch.Tensor,
+        labels: Optional[torch.Tensor] = None,
+        steps: int = 100,
+        progress: bool = False,
+        constrain: bool = False,
+        label_scale: float = 0.0,
+        vq_scale: float = 0.0,
+    ) -> torch.Tensor:
+        """
+        Sample the decoder using unconditional guidance towards encoded audio
+        and corresponding labels.
+
+        :param codes: an [N x T1] Tensor of latent codes or an [N x C x T1]
+                      Tensor of latent code embeddings.
+        :param labels: an [N] Tensor of integer labels.
+        :param steps: number of diffusion steps.
+        :param progress: if True, show a progress bar with tqdm.
+        :param constrain: if True, clamp x_start predictions.
+        :param label_scale: guidance scale for labels (0.0 does no guidance).
+        :param vq_scale: guidance scale for VQ codes (0.0 does no guidance).
+        :return: an [N x 1 x T] Tensor of audio.
+        """
+        if len(codes.shape) == 2:
+            cond_seq = self.vq.embed(codes)
+        elif len(codes.shape) == 3:
+            cond_seq = codes
+        else:
+            raise ValueError(f"unsupported codes shape: {codes.shape}")
+
+        x_T = torch.randn(
+            codes.shape[0], 1, codes.shape[-1] * self.encoder.downsample_rate
+        ).to(codes.device)
+
+        def pred_fn(xs, ts, **kwargs):
+            assert labels is not None
+            xs = torch.cat([xs] * 3, dim=0)
+            ts = torch.cat([ts] * 3, dim=0)
+            kwargs = {k: torch.cat([v] * 3, dim=0) for k, v in kwargs.items()}
+            cond_batch = torch.cat([cond_seq] * 2 + [torch.zeros_like(cond_seq)], dim=0)
+            label_batch = torch.cat(
+                [labels + 1, torch.zeros_like(labels), labels + 1], dim=0
+            )
+            outs = self.predictor(xs, ts, cond=cond_batch, labels=label_batch, **kwargs)
+            both, no_labels, no_cond = torch.split(outs, len(outs) // 3, dim=0)
+            return both + label_scale * (both - no_labels) + vq_scale * (both - no_cond)
+
+        return self.diffusion.ddpm_sample(
+            x_T,
+            pred_fn,
+            steps=steps,
+            progress=progress,
+            constrain=constrain,
         )
 
     @property
