@@ -181,17 +181,33 @@ class VQVAE(DiffusionModel):
         ).to(codes.device)
 
         def pred_fn(xs, ts, **kwargs):
-            assert labels is not None
             xs = torch.cat([xs] * 3, dim=0)
             ts = torch.cat([ts] * 3, dim=0)
             kwargs = {k: torch.cat([v] * 3, dim=0) for k, v in kwargs.items()}
-            cond_batch = torch.cat([cond_seq] * 2 + [torch.zeros_like(cond_seq)], dim=0)
-            label_batch = torch.cat(
-                [labels + 1, torch.zeros_like(labels), labels + 1], dim=0
-            )
+
+            cond_batch = cond_seq
+            label_batch = labels + 1
+
+            if vq_scale:
+                cond_batch = torch.cat([cond_batch, torch.zeros_like(cond_seq)], dim=0)
+                if label_batch is not None:
+                    label_batch = torch.cat([label_batch, labels + 1], dim=0)
+            if labels is not None and label_scale:
+                cond_batch = torch.cat([cond_batch, cond_seq], dim=0)
+                label_batch = torch.cat([label_batch, torch.zeros_like(labels)], dim=0)
             outs = self.predictor(xs, ts, cond=cond_batch, labels=label_batch, **kwargs)
-            both, no_labels, no_cond = torch.split(outs, len(outs) // 3, dim=0)
-            return both + label_scale * (both - no_labels) + vq_scale * (both - no_cond)
+
+            base_pred = outs[: len(cond_seq)]
+            outs = outs[len(cond_seq) :]
+            pred = base_pred
+
+            for flag, scale in [(True, vq_scale), (labels is not None, label_scale)]:
+                if flag and scale:
+                    sub_out = outs[: len(cond_seq)]
+                    outs = outs[len(cond_seq) :]
+                    pred = pred + scale * (base_pred - sub_out)
+
+            return pred
 
         return self.diffusion.ddpm_sample(
             x_T,
