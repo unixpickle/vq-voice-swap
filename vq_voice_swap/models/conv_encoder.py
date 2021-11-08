@@ -34,6 +34,7 @@ class ConvMFCCEncoder(Encoder):
         self.input_rate = input_rate
         self.mfcc_rate = mfcc_rate
         self.mid_channels = base_channels * 12
+        self.version = version
 
         assert mfcc_rate % 2 == 0, "must be able to downsample MFCCs once"
         assert input_rate % mfcc_rate == 0, "must evenly downsample input sequences"
@@ -51,7 +52,8 @@ class ConvMFCCEncoder(Encoder):
             melkwargs=dict(
                 n_fft=n_fft,
                 hop_length=input_rate // self.mfcc_rate,
-                n_mels=40,
+                n_mels=40 if version == 1 else 80,
+                normalized=version == 2,
             ),
         )
 
