@@ -161,7 +161,8 @@ class VQVAE(DiffusionModel):
 
         :param codes: an [N x T1] Tensor of latent codes or an [N x C x T1]
                       Tensor of latent code embeddings.
-        :param labels: an [N] Tensor of integer labels.
+        :param labels: an [N] Tensor of integer labels, which have not been
+                       offset for the unconditional label.
         :param steps: number of diffusion steps.
         :param progress: if True, show a progress bar with tqdm.
         :param constrain: if True, clamp x_start predictions.
