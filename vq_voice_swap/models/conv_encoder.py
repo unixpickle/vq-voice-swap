@@ -25,6 +25,7 @@ class ConvMFCCEncoder(Encoder):
         input_ulaw: bool = True,
         input_rate: int = 16000,
         mfcc_rate: int = 100,
+        version: int = 1,
     ):
         super().__init__()
         self.base_channels = base_channels
@@ -39,12 +40,16 @@ class ConvMFCCEncoder(Encoder):
 
         from torchaudio.transforms import MFCC
 
+        if version == 2:
+            n_fft = round(400 * input_rate / 16000)
+        else:
+            n_fft = (input_rate // self.mfcc_rate) * 2
         self.mfcc = MFCC(
             sample_rate=input_rate,
             n_mfcc=13,
-            log_mels=True,
+            log_mels=version == 1,
             melkwargs=dict(
-                n_fft=(input_rate // self.mfcc_rate) * 2,
+                n_fft=n_fft,
                 hop_length=input_rate // self.mfcc_rate,
                 n_mels=40,
             ),

@@ -67,6 +67,12 @@ def make_encoder(
         return ConvMFCCEncoder(
             base_channels=base_channels, out_channels=base_channels * cond_mult
         )
+    elif enc_name == "conv-mfcc-ulaw-v2":
+        return ConvMFCCEncoder(
+            base_channels=base_channels,
+            out_channels=base_channels * cond_mult,
+            version=2,
+        )
     elif enc_name == "conv-mfcc-linear":
         return ConvMFCCEncoder(
             base_channels=base_channels,
